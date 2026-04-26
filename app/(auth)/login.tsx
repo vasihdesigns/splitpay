@@ -31,26 +31,26 @@ export default function LoginScreen() {
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      className="flex-1 bg-primary-950"
+      className="flex-1 bg-white"
     >
       <View className="flex-1 justify-center px-6">
         {/* Logo / Header */}
         <View className="mb-10 items-center">
-          <View className="w-16 h-16 rounded-2xl bg-primary-500 items-center justify-center mb-4">
+          <View className="w-16 h-16 rounded-2xl bg-indigo-600 items-center justify-center mb-4">
             <Text className="text-white text-3xl font-bold">S</Text>
           </View>
-          <Text className="text-white text-3xl font-bold">SplitPay</Text>
-          <Text className="text-primary-300 text-base mt-1">Split expenses, not friendships</Text>
+          <Text className="text-gray-900 text-3xl font-bold">SplitPay</Text>
+          <Text className="text-gray-500 text-base mt-1">Split expenses, not friendships</Text>
         </View>
 
         {/* Form */}
-        <View className="bg-primary-900 rounded-2xl p-6 gap-4">
+        <View className="gap-4">
           <View>
-            <Text className="text-primary-300 text-sm mb-1 font-medium">Email</Text>
+            <Text className="text-gray-700 text-sm mb-1.5 font-semibold">Email</Text>
             <TextInput
-              className="bg-primary-800 text-white rounded-xl px-4 py-3 text-base"
+              className="bg-gray-50 border border-gray-200 text-gray-900 rounded-xl px-4 py-3.5 text-base"
               placeholder="you@example.com"
-              placeholderTextColor="#6366f1"
+              placeholderTextColor="#9ca3af"
               value={email}
               onChangeText={setEmail}
               keyboardType="email-address"
@@ -60,11 +60,11 @@ export default function LoginScreen() {
           </View>
 
           <View>
-            <Text className="text-primary-300 text-sm mb-1 font-medium">Password</Text>
+            <Text className="text-gray-700 text-sm mb-1.5 font-semibold">Password</Text>
             <TextInput
-              className="bg-primary-800 text-white rounded-xl px-4 py-3 text-base"
+              className="bg-gray-50 border border-gray-200 text-gray-900 rounded-xl px-4 py-3.5 text-base"
               placeholder="••••••••"
-              placeholderTextColor="#6366f1"
+              placeholderTextColor="#9ca3af"
               value={password}
               onChangeText={setPassword}
               secureTextEntry
@@ -72,7 +72,7 @@ export default function LoginScreen() {
           </View>
 
           <TouchableOpacity
-            className="bg-primary-500 rounded-xl py-4 items-center mt-2"
+            className="bg-indigo-600 rounded-xl py-4 items-center mt-2"
             onPress={handleLogin}
             disabled={loading}
           >
@@ -86,9 +86,9 @@ export default function LoginScreen() {
 
         {/* Footer */}
         <View className="mt-6 flex-row justify-center">
-          <Text className="text-primary-400">Don't have an account? </Text>
+          <Text className="text-gray-500">Don't have an account? </Text>
           <Link href="/(auth)/signup">
-            <Text className="text-primary-300 font-bold">Sign Up</Text>
+            <Text className="text-indigo-600 font-bold">Sign Up</Text>
           </Link>
         </View>
       </View>

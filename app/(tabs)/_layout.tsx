@@ -6,7 +6,7 @@ function TabIcon({ emoji, label, focused }: { emoji: string; label: string; focu
     <View className="items-center pt-1">
       <Text style={{ fontSize: 20 }}>{emoji}</Text>
       <Text
-        className={`text-xs mt-0.5 font-medium ${focused ? 'text-primary-400' : 'text-gray-500'}`}
+        style={{ fontSize: 11, marginTop: 2, fontWeight: focused ? '600' : '400', color: focused ? '#4f46e5' : '#9ca3af' }}
       >
         {label}
       </Text>
@@ -20,45 +20,35 @@ export default function TabsLayout() {
       screenOptions={{
         headerShown: false,
         tabBarStyle: {
-          backgroundColor: '#1e1b4b',
-          borderTopColor: '#312e81',
+          backgroundColor: '#ffffff',
+          borderTopColor: '#f1f5f9',
+          borderTopWidth: 1,
           height: 64,
           paddingBottom: 8,
+          elevation: 0,
+          shadowOpacity: 0.05,
+          shadowRadius: 8,
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: -2 },
         },
         tabBarShowLabel: false,
       }}
     >
       <Tabs.Screen
         name="home"
-        options={{
-          tabBarIcon: ({ focused }) => (
-            <TabIcon emoji="🏠" label="Home" focused={focused} />
-          ),
-        }}
+        options={{ tabBarIcon: ({ focused }) => <TabIcon emoji="🏠" label="Home" focused={focused} /> }}
       />
       <Tabs.Screen
         name="groups"
-        options={{
-          tabBarIcon: ({ focused }) => (
-            <TabIcon emoji="👥" label="Groups" focused={focused} />
-          ),
-        }}
+        options={{ tabBarIcon: ({ focused }) => <TabIcon emoji="👥" label="Groups" focused={focused} /> }}
       />
       <Tabs.Screen
         name="activity"
-        options={{
-          tabBarIcon: ({ focused }) => (
-            <TabIcon emoji="🔔" label="Activity" focused={focused} />
-          ),
-        }}
+        options={{ tabBarIcon: ({ focused }) => <TabIcon emoji="🔔" label="Activity" focused={focused} /> }}
       />
       <Tabs.Screen
         name="account"
-        options={{
-          tabBarIcon: ({ focused }) => (
-            <TabIcon emoji="👤" label="Account" focused={focused} />
-          ),
-        }}
+        options={{ tabBarIcon: ({ focused }) => <TabIcon emoji="👤" label="Account" focused={focused} /> }}
       />
     </Tabs>
   );
