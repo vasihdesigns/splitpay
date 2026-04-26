@@ -1,13 +1,7 @@
 import { useState } from 'react';
 import {
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  KeyboardAvoidingView,
-  Platform,
-  ActivityIndicator,
-  Alert,
+  View, Text, TextInput, TouchableOpacity,
+  KeyboardAvoidingView, Platform, ActivityIndicator, Alert, StyleSheet,
 } from 'react-native';
 import { Link } from 'expo-router';
 import { supabase } from '@/lib/supabase';
@@ -18,10 +12,7 @@ export default function LoginScreen() {
   const [loading, setLoading] = useState(false);
 
   async function handleLogin() {
-    if (!email || !password) {
-      Alert.alert('Error', 'Please fill in all fields');
-      return;
-    }
+    if (!email || !password) { Alert.alert('Error', 'Please fill in all fields'); return; }
     setLoading(true);
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     setLoading(false);
@@ -29,40 +20,35 @@ export default function LoginScreen() {
   }
 
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      className="flex-1 bg-white"
-    >
-      <View className="flex-1 justify-center px-6">
-        {/* Logo / Header */}
-        <View className="mb-10 items-center">
-          <View className="w-16 h-16 rounded-2xl bg-indigo-600 items-center justify-center mb-4">
-            <Text className="text-white text-3xl font-bold">S</Text>
+    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={s.screen}>
+      <View style={s.container}>
+        {/* Logo */}
+        <View style={s.header}>
+          <View style={s.logoBox}>
+            <Text style={s.logoText}>S</Text>
           </View>
-          <Text className="text-gray-900 text-3xl font-bold">SplitPay</Text>
-          <Text className="text-gray-500 text-base mt-1">Split expenses, not friendships</Text>
+          <Text style={s.title}>SplitPay</Text>
+          <Text style={s.subtitle}>Split expenses, not friendships</Text>
         </View>
 
         {/* Form */}
-        <View className="gap-4">
-          <View>
-            <Text className="text-gray-700 text-sm mb-1.5 font-semibold">Email</Text>
+        <View style={s.form}>
+          <View style={s.field}>
+            <Text style={s.label}>Email</Text>
             <TextInput
-              className="bg-gray-50 border border-gray-200 text-gray-900 rounded-xl px-4 py-3.5 text-base"
+              style={s.input}
               placeholder="you@example.com"
               placeholderTextColor="#9ca3af"
               value={email}
               onChangeText={setEmail}
               keyboardType="email-address"
               autoCapitalize="none"
-              autoComplete="email"
             />
           </View>
-
-          <View>
-            <Text className="text-gray-700 text-sm mb-1.5 font-semibold">Password</Text>
+          <View style={s.field}>
+            <Text style={s.label}>Password</Text>
             <TextInput
-              className="bg-gray-50 border border-gray-200 text-gray-900 rounded-xl px-4 py-3.5 text-base"
+              style={s.input}
               placeholder="••••••••"
               placeholderTextColor="#9ca3af"
               value={password}
@@ -70,28 +56,35 @@ export default function LoginScreen() {
               secureTextEntry
             />
           </View>
-
-          <TouchableOpacity
-            className="bg-indigo-600 rounded-xl py-4 items-center mt-2"
-            onPress={handleLogin}
-            disabled={loading}
-          >
-            {loading ? (
-              <ActivityIndicator color="white" />
-            ) : (
-              <Text className="text-white font-bold text-base">Sign In</Text>
-            )}
+          <TouchableOpacity style={s.btn} onPress={handleLogin} disabled={loading}>
+            {loading ? <ActivityIndicator color="#fff" /> : <Text style={s.btnText}>Sign In</Text>}
           </TouchableOpacity>
         </View>
 
-        {/* Footer */}
-        <View className="mt-6 flex-row justify-center">
-          <Text className="text-gray-500">Don't have an account? </Text>
-          <Link href="/(auth)/signup">
-            <Text className="text-indigo-600 font-bold">Sign Up</Text>
-          </Link>
+        <View style={s.footer}>
+          <Text style={s.footerText}>Don't have an account? </Text>
+          <Link href="/(auth)/signup"><Text style={s.link}>Sign Up</Text></Link>
         </View>
       </View>
     </KeyboardAvoidingView>
   );
 }
+
+const s = StyleSheet.create({
+  screen:    { flex: 1, backgroundColor: '#ffffff' },
+  container: { flex: 1, justifyContent: 'center', paddingHorizontal: 24 },
+  header:    { alignItems: 'center', marginBottom: 40 },
+  logoBox:   { width: 64, height: 64, borderRadius: 16, backgroundColor: '#4f46e5', alignItems: 'center', justifyContent: 'center', marginBottom: 16 },
+  logoText:  { color: '#fff', fontSize: 28, fontWeight: 'bold' },
+  title:     { color: '#111827', fontSize: 28, fontWeight: 'bold' },
+  subtitle:  { color: '#6b7280', fontSize: 15, marginTop: 4 },
+  form:      { gap: 16 },
+  field:     { gap: 6 },
+  label:     { color: '#374151', fontSize: 14, fontWeight: '600' },
+  input:     { backgroundColor: '#f9fafb', borderWidth: 1, borderColor: '#e5e7eb', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 14, fontSize: 16, color: '#111827' },
+  btn:       { backgroundColor: '#4f46e5', borderRadius: 12, paddingVertical: 16, alignItems: 'center', marginTop: 8 },
+  btnText:   { color: '#fff', fontWeight: 'bold', fontSize: 16 },
+  footer:    { flexDirection: 'row', justifyContent: 'center', marginTop: 24 },
+  footerText:{ color: '#6b7280' },
+  link:      { color: '#4f46e5', fontWeight: 'bold' },
+});

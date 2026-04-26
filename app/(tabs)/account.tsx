@@ -1,4 +1,4 @@
-import { View, Text, TouchableOpacity, Alert, ScrollView } from 'react-native';
+import { View, Text, TouchableOpacity, Alert, ScrollView, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuthStore } from '@/stores/authStore';
 import { getInitials } from '@/lib/utils';
@@ -6,65 +6,77 @@ import { getInitials } from '@/lib/utils';
 export default function AccountScreen() {
   const { user, signOut } = useAuthStore();
 
-  function confirmSignOut() {
-    Alert.alert('Sign Out', 'Are you sure you want to sign out?', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Sign Out', style: 'destructive', onPress: signOut },
-    ]);
-  }
-
   const settings = [
-    { label: 'Edit Profile', icon: '✏️', onPress: () => {} },
-    { label: 'Notifications', icon: '🔔', onPress: () => {} },
-    { label: 'Currency', icon: '💱', onPress: () => {} },
-    { label: 'Privacy Policy', icon: '🔒', onPress: () => {} },
-    { label: 'Terms of Service', icon: '📄', onPress: () => {} },
+    { label: 'Edit Profile',    icon: '✏️', onPress: () => {} },
+    { label: 'Notifications',   icon: '🔔', onPress: () => {} },
+    { label: 'Currency',        icon: '💱', onPress: () => {} },
+    { label: 'Privacy Policy',  icon: '🔒', onPress: () => {} },
+    { label: 'Terms of Service',icon: '📄', onPress: () => {} },
   ];
 
   return (
-    <SafeAreaView className="flex-1 bg-gray-50">
-      <ScrollView className="flex-1">
-        <View className="px-6 pt-4 pb-2">
-          <Text className="text-gray-900 text-2xl font-bold">Account</Text>
-        </View>
+    <SafeAreaView style={s.screen}>
+      <ScrollView contentContainerStyle={{ paddingBottom: 32 }}>
+        <View style={s.topBar}><Text style={s.pageTitle}>Account</Text></View>
 
         {/* Profile Card */}
-        <View className="mx-6 mt-4 mb-5 bg-indigo-600 rounded-2xl p-6 items-center">
-          <View className="w-20 h-20 rounded-full bg-indigo-400 items-center justify-center mb-3">
-            <Text className="text-white text-2xl font-bold">
-              {user?.full_name ? getInitials(user.full_name) : '?'}
-            </Text>
+        <View style={s.profileCard}>
+          <View style={s.avatar}>
+            <Text style={s.avatarText}>{user?.full_name ? getInitials(user.full_name) : '?'}</Text>
           </View>
-          <Text className="text-white text-xl font-bold">{user?.full_name}</Text>
-          <Text className="text-indigo-200 text-sm mt-1">{user?.email}</Text>
+          <Text style={s.profileName}>{user?.full_name}</Text>
+          <Text style={s.profileEmail}>{user?.email}</Text>
         </View>
 
         {/* Settings */}
-        <View className="mx-6 bg-white rounded-2xl overflow-hidden border border-gray-100 mb-4">
-          {settings.map((item, index) => (
+        <View style={s.settingsCard}>
+          {settings.map((item, i) => (
             <TouchableOpacity
               key={item.label}
-              className={`flex-row items-center px-4 py-4 gap-3 ${index < settings.length - 1 ? 'border-b border-gray-100' : ''}`}
+              style={[s.settingsRow, i < settings.length - 1 && s.settingsBorder]}
               onPress={item.onPress}
             >
-              <Text className="text-xl w-8">{item.icon}</Text>
-              <Text className="flex-1 text-gray-900 text-base font-medium">{item.label}</Text>
-              <Text className="text-gray-400 text-lg">›</Text>
+              <Text style={s.settingsIcon}>{item.icon}</Text>
+              <Text style={s.settingsLabel}>{item.label}</Text>
+              <Text style={s.settingsChevron}>›</Text>
             </TouchableOpacity>
           ))}
         </View>
 
         {/* Sign Out */}
         <TouchableOpacity
-          className="mx-6 bg-white rounded-2xl p-4 flex-row items-center gap-3 border border-red-100 mb-8"
-          onPress={confirmSignOut}
+          style={s.signOutBtn}
+          onPress={() => Alert.alert('Sign Out', 'Are you sure?', [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Sign Out', style: 'destructive', onPress: signOut },
+          ])}
         >
-          <Text className="text-xl w-8">👋</Text>
-          <Text className="flex-1 text-red-500 text-base font-semibold">Sign Out</Text>
+          <Text style={s.settingsIcon}>👋</Text>
+          <Text style={s.signOutText}>Sign Out</Text>
         </TouchableOpacity>
 
-        <Text className="text-center text-gray-400 text-xs mb-8">SplitPay v1.0.0</Text>
+        <Text style={s.version}>SplitPay v1.0.0</Text>
       </ScrollView>
     </SafeAreaView>
   );
 }
+
+const s = StyleSheet.create({
+  screen:         { flex: 1, backgroundColor: '#f8fafc' },
+  topBar:         { paddingHorizontal: 24, paddingTop: 16, paddingBottom: 8 },
+  pageTitle:      { color: '#111827', fontSize: 24, fontWeight: 'bold' },
+  profileCard:    { marginHorizontal: 24, marginTop: 16, marginBottom: 20, backgroundColor: '#4f46e5', borderRadius: 20, padding: 24, alignItems: 'center' },
+  avatar:         { width: 80, height: 80, borderRadius: 40, backgroundColor: '#818cf8', alignItems: 'center', justifyContent: 'center', marginBottom: 12 },
+  avatarText:     { color: '#fff', fontSize: 28, fontWeight: 'bold' },
+  profileName:    { color: '#fff', fontSize: 20, fontWeight: 'bold' },
+  profileEmail:   { color: '#c7d2fe', fontSize: 14, marginTop: 4 },
+  settingsCard:   { marginHorizontal: 24, backgroundColor: '#ffffff', borderRadius: 16, overflow: 'hidden', borderWidth: 1, borderColor: '#f1f5f9', marginBottom: 12 },
+  settingsRow:    { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 16 },
+  settingsBorder: { borderBottomWidth: 1, borderBottomColor: '#f1f5f9' },
+  settingsIcon:   { fontSize: 20, width: 32 },
+  settingsLabel:  { flex: 1, color: '#111827', fontSize: 16, fontWeight: '500' },
+  settingsChevron:{ color: '#9ca3af', fontSize: 18 },
+  signOutBtn:     { marginHorizontal: 24, backgroundColor: '#ffffff', borderRadius: 16, padding: 16, flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: '#fee2e2' },
+  signOutText:    { flex: 1, color: '#dc2626', fontSize: 16, fontWeight: '600' },
+  version:        { textAlign: 'center', color: '#9ca3af', fontSize: 12, marginTop: 24 },
+});

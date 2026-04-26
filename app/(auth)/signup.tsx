@@ -1,155 +1,92 @@
 import { useState } from 'react';
 import {
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  KeyboardAvoidingView,
-  Platform,
-  ActivityIndicator,
-  Alert,
-  ScrollView,
+  View, Text, TextInput, TouchableOpacity, KeyboardAvoidingView,
+  Platform, ActivityIndicator, Alert, ScrollView, StyleSheet,
 } from 'react-native';
 import { Link, useRouter } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 
 export default function SignupScreen() {
   const [fullName, setFullName] = useState('');
-  const [email, setEmail] = useState('');
+  const [email, setEmail]       = useState('');
   const [password, setPassword] = useState('');
-  const [confirm, setConfirm] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [confirm, setConfirm]   = useState('');
+  const [loading, setLoading]   = useState(false);
   const router = useRouter();
 
   async function handleSignup() {
-    if (!fullName || !email || !password || !confirm) {
-      Alert.alert('Error', 'Please fill in all fields');
-      return;
-    }
-    if (password !== confirm) {
-      Alert.alert('Error', 'Passwords do not match');
-      return;
-    }
-    if (password.length < 6) {
-      Alert.alert('Error', 'Password must be at least 6 characters');
-      return;
-    }
-
+    if (!fullName || !email || !password || !confirm) { Alert.alert('Error', 'Please fill in all fields'); return; }
+    if (password !== confirm) { Alert.alert('Error', 'Passwords do not match'); return; }
+    if (password.length < 6)  { Alert.alert('Error', 'Password must be at least 6 characters'); return; }
     setLoading(true);
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: { data: { full_name: fullName } },
-    });
+    const { data, error } = await supabase.auth.signUp({ email, password, options: { data: { full_name: fullName } } });
     setLoading(false);
-
-    if (error) {
-      Alert.alert('Signup Failed', error.message);
-      return;
-    }
-
-    if (data.user) {
-      await supabase.from('profiles').upsert({
-        id: data.user.id,
-        email,
-        full_name: fullName,
-      });
-    }
-
-    Alert.alert('Success', 'Account created! Please check your email to verify.', [
+    if (error) { Alert.alert('Signup Failed', error.message); return; }
+    if (data.user) await supabase.from('profiles').upsert({ id: data.user.id, email, full_name: fullName });
+    Alert.alert('Success', 'Account created! Check your email to verify.', [
       { text: 'OK', onPress: () => router.replace('/(auth)/login') },
     ]);
   }
 
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      className="flex-1 bg-white"
-    >
-      <ScrollView contentContainerStyle={{ flexGrow: 1 }} className="flex-1">
-        <View className="flex-1 justify-center px-6 py-10">
-          {/* Header */}
-          <View className="mb-8 items-center">
-            <View className="w-16 h-16 rounded-2xl bg-indigo-600 items-center justify-center mb-4">
-              <Text className="text-white text-3xl font-bold">S</Text>
-            </View>
-            <Text className="text-gray-900 text-3xl font-bold">Create Account</Text>
-            <Text className="text-gray-500 text-base mt-1">Join SplitPay today</Text>
+    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={s.screen}>
+      <ScrollView contentContainerStyle={{ flexGrow: 1 }}>
+        <View style={s.container}>
+          <View style={s.header}>
+            <View style={s.logoBox}><Text style={s.logoText}>S</Text></View>
+            <Text style={s.title}>Create Account</Text>
+            <Text style={s.subtitle}>Join SplitPay today</Text>
           </View>
-
-          {/* Form */}
-          <View className="gap-4">
-            <View>
-              <Text className="text-gray-700 text-sm mb-1.5 font-semibold">Full Name</Text>
-              <TextInput
-                className="bg-gray-50 border border-gray-200 text-gray-900 rounded-xl px-4 py-3.5 text-base"
-                placeholder="John Doe"
-                placeholderTextColor="#9ca3af"
-                value={fullName}
-                onChangeText={setFullName}
-                autoCapitalize="words"
-              />
-            </View>
-
-            <View>
-              <Text className="text-gray-700 text-sm mb-1.5 font-semibold">Email</Text>
-              <TextInput
-                className="bg-gray-50 border border-gray-200 text-gray-900 rounded-xl px-4 py-3.5 text-base"
-                placeholder="you@example.com"
-                placeholderTextColor="#9ca3af"
-                value={email}
-                onChangeText={setEmail}
-                keyboardType="email-address"
-                autoCapitalize="none"
-              />
-            </View>
-
-            <View>
-              <Text className="text-gray-700 text-sm mb-1.5 font-semibold">Password</Text>
-              <TextInput
-                className="bg-gray-50 border border-gray-200 text-gray-900 rounded-xl px-4 py-3.5 text-base"
-                placeholder="••••••••"
-                placeholderTextColor="#9ca3af"
-                value={password}
-                onChangeText={setPassword}
-                secureTextEntry
-              />
-            </View>
-
-            <View>
-              <Text className="text-gray-700 text-sm mb-1.5 font-semibold">Confirm Password</Text>
-              <TextInput
-                className="bg-gray-50 border border-gray-200 text-gray-900 rounded-xl px-4 py-3.5 text-base"
-                placeholder="••••••••"
-                placeholderTextColor="#9ca3af"
-                value={confirm}
-                onChangeText={setConfirm}
-                secureTextEntry
-              />
-            </View>
-
-            <TouchableOpacity
-              className="bg-indigo-600 rounded-xl py-4 items-center mt-2"
-              onPress={handleSignup}
-              disabled={loading}
-            >
-              {loading ? (
-                <ActivityIndicator color="white" />
-              ) : (
-                <Text className="text-white font-bold text-base">Create Account</Text>
-              )}
+          <View style={s.form}>
+            {[
+              { label: 'Full Name', value: fullName, onChange: setFullName, placeholder: 'John Doe', secure: false, keyboard: 'default' as const, cap: 'words' as const },
+              { label: 'Email', value: email, onChange: setEmail, placeholder: 'you@example.com', secure: false, keyboard: 'email-address' as const, cap: 'none' as const },
+              { label: 'Password', value: password, onChange: setPassword, placeholder: '••••••••', secure: true, keyboard: 'default' as const, cap: 'none' as const },
+              { label: 'Confirm Password', value: confirm, onChange: setConfirm, placeholder: '••••••••', secure: true, keyboard: 'default' as const, cap: 'none' as const },
+            ].map((f) => (
+              <View key={f.label} style={s.field}>
+                <Text style={s.label}>{f.label}</Text>
+                <TextInput
+                  style={s.input}
+                  placeholder={f.placeholder}
+                  placeholderTextColor="#9ca3af"
+                  value={f.value}
+                  onChangeText={f.onChange}
+                  secureTextEntry={f.secure}
+                  keyboardType={f.keyboard}
+                  autoCapitalize={f.cap}
+                />
+              </View>
+            ))}
+            <TouchableOpacity style={s.btn} onPress={handleSignup} disabled={loading}>
+              {loading ? <ActivityIndicator color="#fff" /> : <Text style={s.btnText}>Create Account</Text>}
             </TouchableOpacity>
           </View>
-
-          {/* Footer */}
-          <View className="mt-6 flex-row justify-center">
-            <Text className="text-gray-500">Already have an account? </Text>
-            <Link href="/(auth)/login">
-              <Text className="text-indigo-600 font-bold">Sign In</Text>
-            </Link>
+          <View style={s.footer}>
+            <Text style={s.footerText}>Already have an account? </Text>
+            <Link href="/(auth)/login"><Text style={s.link}>Sign In</Text></Link>
           </View>
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
   );
 }
+
+const s = StyleSheet.create({
+  screen:    { flex: 1, backgroundColor: '#ffffff' },
+  container: { flex: 1, justifyContent: 'center', paddingHorizontal: 24, paddingVertical: 40 },
+  header:    { alignItems: 'center', marginBottom: 32 },
+  logoBox:   { width: 64, height: 64, borderRadius: 16, backgroundColor: '#4f46e5', alignItems: 'center', justifyContent: 'center', marginBottom: 16 },
+  logoText:  { color: '#fff', fontSize: 28, fontWeight: 'bold' },
+  title:     { color: '#111827', fontSize: 28, fontWeight: 'bold' },
+  subtitle:  { color: '#6b7280', fontSize: 15, marginTop: 4 },
+  form:      { gap: 16 },
+  field:     { gap: 6 },
+  label:     { color: '#374151', fontSize: 14, fontWeight: '600' },
+  input:     { backgroundColor: '#f9fafb', borderWidth: 1, borderColor: '#e5e7eb', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 14, fontSize: 16, color: '#111827' },
+  btn:       { backgroundColor: '#4f46e5', borderRadius: 12, paddingVertical: 16, alignItems: 'center', marginTop: 8 },
+  btnText:   { color: '#fff', fontWeight: 'bold', fontSize: 16 },
+  footer:    { flexDirection: 'row', justifyContent: 'center', marginTop: 24 },
+  footerText:{ color: '#6b7280' },
+  link:      { color: '#4f46e5', fontWeight: 'bold' },
+});

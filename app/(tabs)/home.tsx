@@ -1,25 +1,16 @@
 import { useEffect, useState } from 'react';
-import {
-  View,
-  Text,
-  ScrollView,
-  TouchableOpacity,
-  ActivityIndicator,
-  RefreshControl,
-} from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, RefreshControl, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
 import { formatCurrency } from '@/lib/utils';
-import { Balance } from '@/types';
 
 export default function HomeScreen() {
   const { user } = useAuthStore();
-  const [balances, setBalances] = useState<Balance[]>([]);
   const [totalOwed, setTotalOwed] = useState(0);
-  const [totalOwe, setTotalOwe] = useState(0);
-  const [loading, setLoading] = useState(true);
+  const [totalOwe, setTotalOwe]   = useState(0);
+  const [loading, setLoading]     = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const router = useRouter();
 
@@ -27,133 +18,110 @@ export default function HomeScreen() {
     if (!user) return;
     const { data, error } = await supabase
       .from('expense_splits')
-      .select('*, expense:expenses(paid_by, amount), user:profiles(id, full_name, avatar_url)')
+      .select('*, expense:expenses(paid_by, amount)')
       .eq('user_id', user.id)
       .eq('paid', false);
-
     if (!error && data) {
-      const balanceMap: Record<string, { amount: number }> = {};
+      let owed = 0, owe = 0;
       for (const split of data) {
         const paidBy = split.expense?.paid_by;
         if (!paidBy || paidBy === user.id) continue;
-        if (!balanceMap[paidBy]) balanceMap[paidBy] = { amount: 0 };
-        balanceMap[paidBy].amount -= split.amount;
+        owe += split.amount;
       }
-      const result = Object.entries(balanceMap).map(([uid, val]) => ({
-        user_id: uid,
-        amount: val.amount,
-      }));
-      setBalances(result);
-      setTotalOwed(result.filter((b) => b.amount > 0).reduce((s, b) => s + b.amount, 0));
-      setTotalOwe(result.filter((b) => b.amount < 0).reduce((s, b) => s + Math.abs(b.amount), 0));
+      setTotalOwed(owed);
+      setTotalOwe(owe);
     }
     setLoading(false);
     setRefreshing(false);
   }
 
   useEffect(() => { fetchBalances(); }, [user]);
-
   const net = totalOwed - totalOwe;
 
   return (
-    <SafeAreaView className="flex-1 bg-gray-50">
+    <SafeAreaView style={s.screen}>
       <ScrollView
-        className="flex-1"
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetchBalances(); }} tintColor="#4f46e5" />
-        }
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetchBalances(); }} tintColor="#4f46e5" />}
       >
         {/* Header */}
-        <View className="px-6 pt-4 pb-2">
-          <Text className="text-gray-500 text-sm">Welcome back,</Text>
-          <Text className="text-gray-900 text-2xl font-bold">{user?.full_name ?? 'User'} 👋</Text>
+        <View style={s.header}>
+          <Text style={s.greeting}>Welcome back,</Text>
+          <Text style={s.name}>{user?.full_name ?? 'User'} 👋</Text>
         </View>
 
-        {/* Net Balance Hero */}
-        <View className="mx-6 mt-4 mb-4 bg-indigo-600 rounded-2xl p-6">
-          <Text className="text-indigo-200 text-sm font-medium mb-1">NET BALANCE</Text>
-          <Text className="text-white text-4xl font-bold">
-            {net >= 0 ? '+' : '-'}{formatCurrency(Math.abs(net))}
-          </Text>
-          <Text className="text-indigo-200 text-sm mt-1">
-            {net >= 0 ? 'Overall you are owed' : 'Overall you owe'}
-          </Text>
+        {/* Hero */}
+        <View style={s.hero}>
+          <Text style={s.heroLabel}>NET BALANCE</Text>
+          <Text style={s.heroAmount}>{net >= 0 ? '+' : '-'}{formatCurrency(Math.abs(net))}</Text>
+          <Text style={s.heroSub}>{net >= 0 ? 'Overall you are owed' : 'Overall you owe'}</Text>
         </View>
 
         {/* Balance Cards */}
-        <View className="flex-row px-6 gap-3 mb-5">
-          <View className="flex-1 bg-white rounded-2xl p-4 border border-gray-100">
-            <Text className="text-gray-500 text-xs font-semibold mb-1">YOU ARE OWED</Text>
-            <Text className="text-green-600 text-xl font-bold">{formatCurrency(totalOwed)}</Text>
+        <View style={s.row}>
+          <View style={s.card}>
+            <Text style={s.cardLabel}>YOU ARE OWED</Text>
+            <Text style={[s.cardAmount, { color: '#16a34a' }]}>{formatCurrency(totalOwed)}</Text>
           </View>
-          <View className="flex-1 bg-white rounded-2xl p-4 border border-gray-100">
-            <Text className="text-gray-500 text-xs font-semibold mb-1">YOU OWE</Text>
-            <Text className="text-red-500 text-xl font-bold">{formatCurrency(totalOwe)}</Text>
+          <View style={s.card}>
+            <Text style={s.cardLabel}>YOU OWE</Text>
+            <Text style={[s.cardAmount, { color: '#dc2626' }]}>{formatCurrency(totalOwe)}</Text>
           </View>
         </View>
 
         {/* Quick Actions */}
-        <View className="px-6 mb-5">
-          <Text className="text-gray-900 font-bold text-lg mb-3">Quick Actions</Text>
-          <View className="flex-row gap-3">
-            <TouchableOpacity
-              className="flex-1 bg-indigo-600 rounded-2xl p-4 items-center"
-              onPress={() => router.push('/group/new')}
-            >
-              <Text className="text-2xl mb-1">➕</Text>
-              <Text className="text-white text-xs font-semibold">New Group</Text>
+        <View style={s.section}>
+          <Text style={s.sectionTitle}>Quick Actions</Text>
+          <View style={s.row}>
+            <TouchableOpacity style={[s.action, { backgroundColor: '#4f46e5' }]} onPress={() => router.push('/group/new')}>
+              <Text style={{ fontSize: 24, marginBottom: 4 }}>➕</Text>
+              <Text style={[s.actionText, { color: '#fff' }]}>New Group</Text>
             </TouchableOpacity>
-            <TouchableOpacity
-              className="flex-1 bg-white border border-gray-100 rounded-2xl p-4 items-center"
-              onPress={() => router.push('/(tabs)/groups')}
-            >
-              <Text className="text-2xl mb-1">💸</Text>
-              <Text className="text-gray-700 text-xs font-semibold">Add Expense</Text>
+            <TouchableOpacity style={[s.action, s.actionOutline]} onPress={() => router.push('/(tabs)/groups')}>
+              <Text style={{ fontSize: 24, marginBottom: 4 }}>💸</Text>
+              <Text style={s.actionText}>Add Expense</Text>
             </TouchableOpacity>
-            <TouchableOpacity
-              className="flex-1 bg-white border border-gray-100 rounded-2xl p-4 items-center"
-              onPress={() => router.push('/(tabs)/activity')}
-            >
-              <Text className="text-2xl mb-1">📊</Text>
-              <Text className="text-gray-700 text-xs font-semibold">Activity</Text>
+            <TouchableOpacity style={[s.action, s.actionOutline]} onPress={() => router.push('/(tabs)/activity')}>
+              <Text style={{ fontSize: 24, marginBottom: 4 }}>📊</Text>
+              <Text style={s.actionText}>Activity</Text>
             </TouchableOpacity>
           </View>
         </View>
 
         {/* Balances */}
-        <View className="px-6 pb-8">
-          <Text className="text-gray-900 font-bold text-lg mb-3">Balances</Text>
-          {loading ? (
-            <ActivityIndicator color="#4f46e5" />
-          ) : balances.length === 0 ? (
-            <View className="bg-white rounded-2xl p-6 items-center border border-gray-100">
-              <Text className="text-4xl mb-2">🎉</Text>
-              <Text className="text-gray-900 font-bold">All settled up!</Text>
-              <Text className="text-gray-500 text-sm mt-1 text-center">
-                No outstanding balances with friends
-              </Text>
+        <View style={[s.section, { paddingBottom: 32 }]}>
+          <Text style={s.sectionTitle}>Balances</Text>
+          {loading ? <ActivityIndicator color="#4f46e5" /> : (
+            <View style={s.emptyCard}>
+              <Text style={{ fontSize: 40, marginBottom: 8 }}>🎉</Text>
+              <Text style={s.emptyTitle}>All settled up!</Text>
+              <Text style={s.emptySubtitle}>No outstanding balances</Text>
             </View>
-          ) : (
-            balances.map((balance) => (
-              <View
-                key={balance.user_id}
-                className="bg-white rounded-xl p-4 mb-2 flex-row justify-between items-center border border-gray-100"
-              >
-                <View className="flex-row items-center gap-3">
-                  <View className="w-10 h-10 rounded-full bg-indigo-100 items-center justify-center">
-                    <Text className="text-indigo-600 font-bold">?</Text>
-                  </View>
-                  <Text className="text-gray-900 font-medium">Friend</Text>
-                </View>
-                <Text className={`font-bold text-base ${balance.amount >= 0 ? 'text-green-600' : 'text-red-500'}`}>
-                  {balance.amount >= 0 ? 'owes you ' : 'you owe '}
-                  {formatCurrency(Math.abs(balance.amount))}
-                </Text>
-              </View>
-            ))
           )}
         </View>
       </ScrollView>
     </SafeAreaView>
   );
 }
+
+const s = StyleSheet.create({
+  screen:       { flex: 1, backgroundColor: '#f8fafc' },
+  header:       { paddingHorizontal: 24, paddingTop: 16, paddingBottom: 8 },
+  greeting:     { color: '#6b7280', fontSize: 14 },
+  name:         { color: '#111827', fontSize: 24, fontWeight: 'bold' },
+  hero:         { marginHorizontal: 24, marginTop: 16, marginBottom: 16, backgroundColor: '#4f46e5', borderRadius: 20, padding: 24 },
+  heroLabel:    { color: '#c7d2fe', fontSize: 12, fontWeight: '600', marginBottom: 4 },
+  heroAmount:   { color: '#fff', fontSize: 40, fontWeight: 'bold' },
+  heroSub:      { color: '#c7d2fe', fontSize: 13, marginTop: 4 },
+  row:          { flexDirection: 'row', paddingHorizontal: 24, gap: 12, marginBottom: 8 },
+  card:         { flex: 1, backgroundColor: '#ffffff', borderRadius: 16, padding: 16, borderWidth: 1, borderColor: '#f1f5f9' },
+  cardLabel:    { color: '#6b7280', fontSize: 11, fontWeight: '600', marginBottom: 4 },
+  cardAmount:   { fontSize: 20, fontWeight: 'bold' },
+  section:      { paddingHorizontal: 24, marginTop: 16 },
+  sectionTitle: { color: '#111827', fontSize: 18, fontWeight: 'bold', marginBottom: 12 },
+  action:       { flex: 1, borderRadius: 16, padding: 16, alignItems: 'center' },
+  actionOutline:{ backgroundColor: '#ffffff', borderWidth: 1, borderColor: '#f1f5f9' },
+  actionText:   { color: '#374151', fontSize: 12, fontWeight: '600' },
+  emptyCard:    { backgroundColor: '#ffffff', borderRadius: 16, padding: 32, alignItems: 'center', borderWidth: 1, borderColor: '#f1f5f9' },
+  emptyTitle:   { color: '#111827', fontWeight: 'bold', fontSize: 16 },
+  emptySubtitle:{ color: '#6b7280', fontSize: 13, marginTop: 4 },
+});

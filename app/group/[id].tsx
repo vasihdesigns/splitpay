@@ -1,8 +1,5 @@
 import { useEffect, useState } from 'react';
-import {
-  View, Text, ScrollView, TouchableOpacity,
-  ActivityIndicator, Alert, TextInput,
-} from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Alert, TextInput, StyleSheet } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { supabase } from '@/lib/supabase';
@@ -11,16 +8,15 @@ import { formatCurrency, formatDate } from '@/lib/utils';
 import { Expense, Group } from '@/types';
 
 const CATEGORY_ICONS: Record<string, string> = {
-  food: '🍔', transport: '🚗', accommodation: '🏨',
-  entertainment: '🎬', utilities: '💡', shopping: '🛍️',
-  health: '💊', other: '📦',
+  food: '🍔', transport: '🚗', accommodation: '🏨', entertainment: '🎬',
+  utilities: '💡', shopping: '🛍️', health: '💊', other: '📦',
 };
 
 export default function GroupDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { user } = useAuthStore();
   const router = useRouter();
-  const [group, setGroup] = useState<Group | null>(null);
+  const [group, setGroup]     = useState<Group | null>(null);
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -36,114 +32,81 @@ export default function GroupDetailScreen() {
   }
 
   useEffect(() => { fetchGroup(); }, [id]);
-
   if (id === 'new') return <CreateGroupScreen />;
 
   if (loading) {
-    return (
-      <SafeAreaView className="flex-1 bg-gray-50 items-center justify-center">
-        <ActivityIndicator color="#4f46e5" size="large" />
-      </SafeAreaView>
-    );
+    return <SafeAreaView style={s.screen}><ActivityIndicator color="#4f46e5" size="large" style={{ marginTop: 80 }} /></SafeAreaView>;
   }
 
-  const myExpenses = expenses.reduce((total, e) =>
-    e.paid_by === user?.id ? total + e.amount : total, 0);
+  const myExpenses = expenses.reduce((t, e) => e.paid_by === user?.id ? t + e.amount : t, 0);
 
   return (
-    <SafeAreaView className="flex-1 bg-gray-50">
-      {/* Header */}
-      <View className="flex-row items-center px-4 pt-2 pb-4 gap-3 bg-white border-b border-gray-100">
-        <TouchableOpacity onPress={() => router.back()} className="p-2">
-          <Text className="text-indigo-600 text-lg font-medium">‹ Back</Text>
+    <SafeAreaView style={s.screen}>
+      <View style={s.header}>
+        <TouchableOpacity onPress={() => router.back()} style={{ padding: 8 }}>
+          <Text style={s.back}>‹ Back</Text>
         </TouchableOpacity>
-        <Text className="text-gray-900 text-xl font-bold flex-1">{group?.name}</Text>
-        <TouchableOpacity className="bg-indigo-600 rounded-xl px-3 py-2">
-          <Text className="text-white font-bold text-sm">+ Expense</Text>
+        <Text style={s.headerTitle} numberOfLines={1}>{group?.name}</Text>
+        <TouchableOpacity style={s.addBtn}>
+          <Text style={s.addBtnText}>+ Expense</Text>
         </TouchableOpacity>
       </View>
 
-      <ScrollView className="flex-1 px-4 pt-4">
-        {/* Stats */}
-        <View className="flex-row gap-3 mb-5">
-          <View className="flex-1 bg-white rounded-xl p-3 border border-gray-100">
-            <Text className="text-gray-500 text-xs">Total Spent</Text>
-            <Text className="text-gray-900 font-bold text-lg">
-              {formatCurrency(expenses.reduce((s, e) => s + e.amount, 0))}
-            </Text>
-          </View>
-          <View className="flex-1 bg-white rounded-xl p-3 border border-gray-100">
-            <Text className="text-gray-500 text-xs">You Paid</Text>
-            <Text className="text-gray-900 font-bold text-lg">{formatCurrency(myExpenses)}</Text>
-          </View>
-          <View className="flex-1 bg-white rounded-xl p-3 border border-gray-100">
-            <Text className="text-gray-500 text-xs">Members</Text>
-            <Text className="text-gray-900 font-bold text-lg">{group?.members?.length ?? 0}</Text>
-          </View>
+      <ScrollView contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 16, paddingBottom: 32 }}>
+        <View style={s.statsRow}>
+          {[
+            { label: 'Total Spent', value: formatCurrency(expenses.reduce((s, e) => s + e.amount, 0)) },
+            { label: 'You Paid',    value: formatCurrency(myExpenses) },
+            { label: 'Members',     value: String(group?.members?.length ?? 0) },
+          ].map((stat) => (
+            <View key={stat.label} style={s.statCard}>
+              <Text style={s.statLabel}>{stat.label}</Text>
+              <Text style={s.statValue}>{stat.value}</Text>
+            </View>
+          ))}
         </View>
 
-        {/* Expenses */}
-        <Text className="text-gray-900 font-bold text-lg mb-3">Expenses</Text>
+        <Text style={s.sectionTitle}>Expenses</Text>
         {expenses.length === 0 ? (
-          <View className="bg-white rounded-2xl p-8 items-center border border-gray-100">
-            <Text className="text-4xl mb-2">💸</Text>
-            <Text className="text-gray-900 font-bold">No expenses yet</Text>
-            <Text className="text-gray-500 text-sm mt-1 text-center">
-              Tap "+ Expense" to start tracking
-            </Text>
+          <View style={s.emptyCard}>
+            <Text style={{ fontSize: 40, marginBottom: 8 }}>💸</Text>
+            <Text style={s.emptyTitle}>No expenses yet</Text>
+            <Text style={s.emptySub}>Tap "+ Expense" to start tracking</Text>
           </View>
-        ) : (
-          expenses.map((expense) => (
-            <View key={expense.id} className="bg-white rounded-xl p-4 mb-2 border border-gray-100">
-              <View className="flex-row justify-between items-start">
-                <View className="flex-row items-center gap-3 flex-1">
-                  <View className="w-10 h-10 rounded-xl bg-indigo-50 items-center justify-center">
-                    <Text>{CATEGORY_ICONS[expense.category] ?? '📦'}</Text>
-                  </View>
-                  <View className="flex-1">
-                    <Text className="text-gray-900 font-semibold">{expense.description}</Text>
-                    <Text className="text-gray-400 text-xs mt-0.5">
-                      {expense.payer?.full_name ?? 'Unknown'} · {formatDate(expense.date)}
-                    </Text>
-                  </View>
-                </View>
-                <Text className="text-gray-900 font-bold text-base">
-                  {formatCurrency(expense.amount)}
-                </Text>
-              </View>
+        ) : expenses.map((e) => (
+          <View key={e.id} style={s.expenseCard}>
+            <View style={s.expenseIcon}><Text>{CATEGORY_ICONS[e.category] ?? '📦'}</Text></View>
+            <View style={{ flex: 1 }}>
+              <Text style={s.expenseTitle}>{e.description}</Text>
+              <Text style={s.expenseSub}>{e.payer?.full_name ?? 'Unknown'} · {formatDate(e.date)}</Text>
             </View>
-          ))
-        )}
-        <View className="h-6" />
+            <Text style={s.expenseAmount}>{formatCurrency(e.amount)}</Text>
+          </View>
+        ))}
       </ScrollView>
     </SafeAreaView>
   );
 }
 
-// ─── Create Group Screen ──────────────────────────────────────────────────────
 function CreateGroupScreen() {
   const { user } = useAuthStore();
   const router = useRouter();
-  const [name, setName] = useState('');
-  const [type, setType] = useState<'home' | 'trip' | 'couple' | 'other'>('other');
+  const [name, setName]     = useState('');
+  const [type, setType]     = useState<'home' | 'trip' | 'couple' | 'other'>('other');
   const [loading, setLoading] = useState(false);
 
   const types = [
-    { key: 'home', label: 'Home', icon: '🏠' },
-    { key: 'trip', label: 'Trip', icon: '✈️' },
-    { key: 'couple', label: 'Couple', icon: '💑' },
-    { key: 'other', label: 'Other', icon: '👥' },
-  ] as const;
+    { key: 'home' as const, label: 'Home', icon: '🏠' },
+    { key: 'trip' as const, label: 'Trip', icon: '✈️' },
+    { key: 'couple' as const, label: 'Couple', icon: '💑' },
+    { key: 'other' as const, label: 'Other', icon: '👥' },
+  ];
 
   async function handleCreate() {
     if (!name.trim()) { Alert.alert('Error', 'Please enter a group name'); return; }
     if (!user) return;
     setLoading(true);
-    const { data: group, error } = await supabase
-      .from('groups')
-      .insert({ name: name.trim(), type, created_by: user.id })
-      .select()
-      .single();
+    const { data: group, error } = await supabase.from('groups').insert({ name: name.trim(), type, created_by: user.id }).select().single();
     if (error) { Alert.alert('Error', error.message); setLoading(false); return; }
     await supabase.from('group_members').insert({ group_id: group.id, user_id: user.id });
     setLoading(false);
@@ -151,60 +114,72 @@ function CreateGroupScreen() {
   }
 
   return (
-    <SafeAreaView className="flex-1 bg-gray-50">
-      <View className="flex-row items-center px-4 pt-2 pb-4 gap-3 bg-white border-b border-gray-100">
-        <TouchableOpacity onPress={() => router.back()} className="p-2">
-          <Text className="text-indigo-600 text-lg font-medium">‹ Back</Text>
+    <SafeAreaView style={s.screen}>
+      <View style={s.header}>
+        <TouchableOpacity onPress={() => router.back()} style={{ padding: 8 }}>
+          <Text style={s.back}>‹ Back</Text>
         </TouchableOpacity>
-        <Text className="text-gray-900 text-xl font-bold">Create Group</Text>
+        <Text style={s.headerTitle}>Create Group</Text>
+        <View style={{ width: 80 }} />
       </View>
-
-      <View className="px-6 pt-6 gap-5">
-        <View>
-          <Text className="text-gray-700 text-sm font-semibold mb-1.5">Group Name</Text>
+      <View style={{ paddingHorizontal: 24, paddingTop: 24, gap: 20 }}>
+        <View style={{ gap: 8 }}>
+          <Text style={s.label}>Group Name</Text>
           <TextInput
-            className="bg-white border border-gray-200 text-gray-900 rounded-xl px-4 py-3.5 text-base"
+            style={s.input}
             placeholder="e.g. Barcelona Trip"
             placeholderTextColor="#9ca3af"
             value={name}
             onChangeText={setName}
           />
         </View>
-
-        <View>
-          <Text className="text-gray-700 text-sm font-semibold mb-2">Group Type</Text>
-          <View className="flex-row gap-3">
+        <View style={{ gap: 8 }}>
+          <Text style={s.label}>Group Type</Text>
+          <View style={{ flexDirection: 'row', gap: 12 }}>
             {types.map((t) => (
               <TouchableOpacity
                 key={t.key}
-                className={`flex-1 rounded-xl p-3 items-center border ${
-                  type === t.key
-                    ? 'bg-indigo-600 border-indigo-600'
-                    : 'bg-white border-gray-200'
-                }`}
+                style={[s.typeBtn, type === t.key && s.typeBtnActive]}
                 onPress={() => setType(t.key)}
               >
-                <Text className="text-xl mb-1">{t.icon}</Text>
-                <Text className={`text-xs font-semibold ${type === t.key ? 'text-white' : 'text-gray-600'}`}>
-                  {t.label}
-                </Text>
+                <Text style={{ fontSize: 22, marginBottom: 4 }}>{t.icon}</Text>
+                <Text style={[s.typeBtnLabel, type === t.key && { color: '#fff' }]}>{t.label}</Text>
               </TouchableOpacity>
             ))}
           </View>
         </View>
-
-        <TouchableOpacity
-          className="bg-indigo-600 rounded-xl py-4 items-center mt-2"
-          onPress={handleCreate}
-          disabled={loading}
-        >
-          {loading ? (
-            <ActivityIndicator color="white" />
-          ) : (
-            <Text className="text-white font-bold text-base">Create Group</Text>
-          )}
+        <TouchableOpacity style={s.addBtn2} onPress={handleCreate} disabled={loading}>
+          {loading ? <ActivityIndicator color="#fff" /> : <Text style={s.addBtnText}>Create Group</Text>}
         </TouchableOpacity>
       </View>
     </SafeAreaView>
   );
 }
+
+const s = StyleSheet.create({
+  screen:       { flex: 1, backgroundColor: '#f8fafc' },
+  header:       { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8, paddingTop: 8, paddingBottom: 12, backgroundColor: '#ffffff', borderBottomWidth: 1, borderBottomColor: '#f1f5f9', gap: 8 },
+  back:         { color: '#4f46e5', fontSize: 17, fontWeight: '500' },
+  headerTitle:  { flex: 1, color: '#111827', fontSize: 18, fontWeight: 'bold' },
+  addBtn:       { backgroundColor: '#4f46e5', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 7 },
+  addBtnText:   { color: '#ffffff', fontWeight: 'bold', fontSize: 13 },
+  statsRow:     { flexDirection: 'row', gap: 10, marginBottom: 20 },
+  statCard:     { flex: 1, backgroundColor: '#ffffff', borderRadius: 12, padding: 12, borderWidth: 1, borderColor: '#f1f5f9' },
+  statLabel:    { color: '#9ca3af', fontSize: 11, marginBottom: 4 },
+  statValue:    { color: '#111827', fontWeight: 'bold', fontSize: 16 },
+  sectionTitle: { color: '#111827', fontWeight: 'bold', fontSize: 18, marginBottom: 12 },
+  emptyCard:    { backgroundColor: '#ffffff', borderRadius: 16, padding: 32, alignItems: 'center', borderWidth: 1, borderColor: '#f1f5f9' },
+  emptyTitle:   { color: '#111827', fontWeight: 'bold', fontSize: 16 },
+  emptySub:     { color: '#6b7280', fontSize: 13, marginTop: 4, textAlign: 'center' },
+  expenseCard:  { backgroundColor: '#ffffff', borderRadius: 12, padding: 14, marginBottom: 8, flexDirection: 'row', alignItems: 'center', gap: 12, borderWidth: 1, borderColor: '#f1f5f9' },
+  expenseIcon:  { width: 40, height: 40, borderRadius: 10, backgroundColor: '#eef2ff', alignItems: 'center', justifyContent: 'center' },
+  expenseTitle: { color: '#111827', fontWeight: '600', fontSize: 15 },
+  expenseSub:   { color: '#9ca3af', fontSize: 12, marginTop: 2 },
+  expenseAmount:{ color: '#111827', fontWeight: 'bold', fontSize: 15 },
+  label:        { color: '#374151', fontSize: 14, fontWeight: '600' },
+  input:        { backgroundColor: '#ffffff', borderWidth: 1, borderColor: '#e5e7eb', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 14, fontSize: 16, color: '#111827' },
+  typeBtn:      { flex: 1, borderRadius: 12, padding: 12, alignItems: 'center', backgroundColor: '#ffffff', borderWidth: 1, borderColor: '#e5e7eb' },
+  typeBtnActive:{ backgroundColor: '#4f46e5', borderColor: '#4f46e5' },
+  typeBtnLabel: { color: '#374151', fontSize: 12, fontWeight: '600' },
+  addBtn2:      { backgroundColor: '#4f46e5', borderRadius: 12, paddingVertical: 16, alignItems: 'center', marginTop: 8 },
+});

@@ -1,28 +1,17 @@
 import { useEffect, useState } from 'react';
-import { View, Text, ScrollView, ActivityIndicator, RefreshControl } from 'react-native';
+import { View, Text, ScrollView, ActivityIndicator, RefreshControl, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
 import { formatDate, formatCurrency } from '@/lib/utils';
 
-interface ActivityItem {
-  id: string;
-  type: string;
-  description: string;
-  amount?: number;
-  actor_name: string;
-  created_at: string;
-}
-
-const ACTIVITY_ICONS: Record<string, string> = {
-  expense_added: '💸', expense_edited: '✏️', expense_deleted: '🗑️',
-  settlement: '✅', member_added: '👋',
-};
+interface ActivityItem { id: string; type: string; description: string; amount?: number; actor_name: string; created_at: string; }
+const ICONS: Record<string, string> = { expense_added: '💸', expense_edited: '✏️', expense_deleted: '🗑️', settlement: '✅', member_added: '👋' };
 
 export default function ActivityScreen() {
   const { user } = useAuthStore();
   const [activities, setActivities] = useState<ActivityItem[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading]       = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
   async function fetchActivity() {
@@ -33,68 +22,66 @@ export default function ActivityScreen() {
       .or(`actor_id.eq.${user.id}`)
       .order('created_at', { ascending: false })
       .limit(50);
-
     if (!error && data) {
       setActivities(data.map((a: any) => ({
-        id: a.id,
-        type: a.type,
+        id: a.id, type: a.type,
         description: a.expense?.description ?? 'Activity',
         amount: a.expense?.amount,
         actor_name: a.actor?.full_name ?? 'Someone',
         created_at: a.created_at,
       })));
     }
-    setLoading(false);
-    setRefreshing(false);
+    setLoading(false); setRefreshing(false);
   }
 
   useEffect(() => { fetchActivity(); }, [user]);
 
   return (
-    <SafeAreaView className="flex-1 bg-gray-50">
-      <View className="px-6 pt-4 pb-4">
-        <Text className="text-gray-900 text-2xl font-bold">Activity</Text>
-      </View>
-
+    <SafeAreaView style={s.screen}>
+      <View style={s.topBar}><Text style={s.pageTitle}>Activity</Text></View>
       <ScrollView
-        className="flex-1 px-6"
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetchActivity(); }} tintColor="#4f46e5" />
-        }
+        style={{ flex: 1 }}
+        contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 32 }}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetchActivity(); }} tintColor="#4f46e5" />}
       >
-        {loading ? (
-          <ActivityIndicator color="#4f46e5" className="mt-10" />
-        ) : activities.length === 0 ? (
-          <View className="items-center mt-20">
-            <Text className="text-5xl mb-4">🔔</Text>
-            <Text className="text-gray-900 font-bold text-lg">No activity yet</Text>
-            <Text className="text-gray-500 text-sm mt-2 text-center">
-              Expense activity with friends will appear here
-            </Text>
+        {loading ? <ActivityIndicator color="#4f46e5" style={{ marginTop: 40 }} /> :
+         activities.length === 0 ? (
+          <View style={s.empty}>
+            <Text style={{ fontSize: 48, marginBottom: 16 }}>🔔</Text>
+            <Text style={s.emptyTitle}>No activity yet</Text>
+            <Text style={s.emptySub}>Expense activity will appear here</Text>
           </View>
-        ) : (
-          activities.map((item) => (
-            <View key={item.id} className="bg-white rounded-xl p-4 mb-2 flex-row items-center gap-3 border border-gray-100">
-              <View className="w-10 h-10 rounded-full bg-indigo-50 items-center justify-center">
-                <Text>{ACTIVITY_ICONS[item.type] ?? '📌'}</Text>
-              </View>
-              <View className="flex-1">
-                <Text className="text-gray-900 font-medium">
-                  {item.actor_name}{' '}
-                  <Text className="text-gray-500 font-normal">
-                    {item.type === 'expense_added' ? 'added' : item.type.replace('_', ' ')}
-                  </Text>{' '}
-                  {item.description}
-                </Text>
-                {item.amount !== undefined && (
-                  <Text className="text-gray-500 text-sm">{formatCurrency(item.amount)}</Text>
-                )}
-                <Text className="text-gray-400 text-xs mt-0.5">{formatDate(item.created_at)}</Text>
-              </View>
+        ) : activities.map((item) => (
+          <View key={item.id} style={s.card}>
+            <View style={s.iconBox}><Text>{ICONS[item.type] ?? '📌'}</Text></View>
+            <View style={{ flex: 1 }}>
+              <Text style={s.actorText}>
+                <Text style={s.actorName}>{item.actor_name} </Text>
+                <Text style={s.actorAction}>{item.type === 'expense_added' ? 'added' : item.type.replace('_', ' ')} </Text>
+                {item.description}
+              </Text>
+              {item.amount !== undefined && <Text style={s.amount}>{formatCurrency(item.amount)}</Text>}
+              <Text style={s.date}>{formatDate(item.created_at)}</Text>
             </View>
-          ))
-        )}
+          </View>
+        ))}
       </ScrollView>
     </SafeAreaView>
   );
 }
+
+const s = StyleSheet.create({
+  screen:     { flex: 1, backgroundColor: '#f8fafc' },
+  topBar:     { paddingHorizontal: 24, paddingTop: 16, paddingBottom: 16 },
+  pageTitle:  { color: '#111827', fontSize: 24, fontWeight: 'bold' },
+  card:       { backgroundColor: '#ffffff', borderRadius: 12, padding: 16, marginBottom: 8, flexDirection: 'row', alignItems: 'center', gap: 12, borderWidth: 1, borderColor: '#f1f5f9' },
+  iconBox:    { width: 40, height: 40, borderRadius: 20, backgroundColor: '#eef2ff', alignItems: 'center', justifyContent: 'center' },
+  actorText:  { color: '#111827', fontSize: 14 },
+  actorName:  { fontWeight: '600' },
+  actorAction:{ color: '#6b7280' },
+  amount:     { color: '#6b7280', fontSize: 13, marginTop: 2 },
+  date:       { color: '#9ca3af', fontSize: 12, marginTop: 2 },
+  empty:      { alignItems: 'center', marginTop: 80 },
+  emptyTitle: { color: '#111827', fontWeight: 'bold', fontSize: 18 },
+  emptySub:   { color: '#6b7280', fontSize: 14, marginTop: 8, textAlign: 'center' },
+});
