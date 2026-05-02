@@ -38,6 +38,13 @@ yarn-error.*
 # typescript
 *.tsbuildinfo
 
-# generated native folders
-/ios
+# generated native folders (bare workflow — ios/ is committed)
+# /ios
 /android
+
+# iOS build artifacts (not committed)
+ios/build/
+ios/Pods/
+ios/DerivedData/
+ios/*.xcworkspace/xcuserdata/
+ios/**/*.xcuserstate
