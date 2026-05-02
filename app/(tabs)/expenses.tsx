@@ -8,14 +8,15 @@
 import { useCallback, useMemo, useState } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, ActivityIndicator,
-  StyleSheet, RefreshControl,
+  StyleSheet, RefreshControl, Alert, ActionSheetIOS, Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
-import { formatCurrency, getInitials, getExpenseIcon } from '@/lib/utils';
+import { formatCurrency, getExpenseIcon } from '@/lib/utils';
+import { useTheme } from '@/lib/theme';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -60,6 +61,7 @@ function last6MonthKeys(): string[] {
 export default function ExpensesScreen() {
   const { user } = useAuthStore();
   const router   = useRouter();
+  const t        = useTheme();
 
   const [rows,       setRows]       = useState<ExpenseRow[]>([]);
   const [loading,    setLoading]    = useState(true);
@@ -137,6 +139,49 @@ export default function ExpensesScreen() {
   }
 
   useFocusEffect(useCallback(() => { fetchExpenses(); }, [user]));
+
+  async function handleDelete(expenseId: string) {
+    await supabase.from('expense_splits').delete().eq('expense_id', expenseId);
+    await supabase.from('expenses').delete().eq('id', expenseId);
+    setRows(prev => prev.filter(r => r.id !== expenseId));
+  }
+
+  async function handleSettleUp(expenseId: string) {
+    await supabase.from('expense_splits').update({ paid: true }).eq('expense_id', expenseId);
+    setRows(prev => prev.filter(r => r.id !== expenseId)); // remove settled from list
+    await fetchExpenses();
+  }
+
+  function showActionSheet(e: ExpenseRow) {
+    const options = ['Settle Up', 'Edit', 'Delete', 'Cancel'];
+    const destructiveIndex = 2;
+    const cancelIndex = 3;
+
+    if (Platform.OS === 'ios') {
+      ActionSheetIOS.showActionSheetWithOptions(
+        { options, destructiveButtonIndex: destructiveIndex, cancelButtonIndex: cancelIndex, title: e.description },
+        (idx) => {
+          if (idx === 0) handleSettleUp(e.id);
+          if (idx === 1) router.push({ pathname: '/edit-expense', params: { expenseId: e.id } });
+          if (idx === 2) confirmDelete(e);
+        }
+      );
+    } else {
+      Alert.alert(e.description, undefined, [
+        { text: 'Settle Up', onPress: () => handleSettleUp(e.id) },
+        { text: 'Edit', onPress: () => router.push({ pathname: '/edit-expense', params: { expenseId: e.id } }) },
+        { text: 'Delete', style: 'destructive', onPress: () => confirmDelete(e) },
+        { text: 'Cancel', style: 'cancel' },
+      ]);
+    }
+  }
+
+  function confirmDelete(e: ExpenseRow) {
+    Alert.alert('Delete Expense', `Delete "${e.description}"? This cannot be undone.`, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Delete', style: 'destructive', onPress: () => handleDelete(e.id) },
+    ]);
+  }
 
   // ── Derived ────────────────────────────────────────────────────────────────
   const chartKeys    = useMemo(() => last6MonthKeys(), []);
@@ -330,6 +375,8 @@ export default function ExpensesScreen() {
                         key={e.id}
                         style={[s.row, !last && s.rowBorder]}
                         onPress={() => router.push({ pathname: '/expense-detail', params: { expenseId: e.id } })}
+                        onLongPress={() => showActionSheet(e)}
+                        delayLongPress={350}
                         activeOpacity={0.7}
                       >
                         {/* Date stamp */}

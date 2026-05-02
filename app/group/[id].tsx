@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, ActivityIndicator,
   Alert, TextInput, StyleSheet, RefreshControl, Share,
-  Animated, PanResponder,
+  ActionSheetIOS, Platform,
 } from 'react-native';
 import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -81,6 +81,38 @@ export default function GroupDetailScreen() {
       .map(([uid, amt]) => ({ uid, name: memberMap[uid] ?? 'Unknown', amount: amt }))
       .sort((a, b) => a.amount - b.amount);
   }, [expenses, user, memberMap]);
+
+  async function handleSettleExpense(expenseId: string) {
+    await supabase.from('expense_splits').update({ paid: true }).eq('expense_id', expenseId);
+    fetchGroup();
+  }
+
+  function showExpenseActions(expense: any) {
+    const options = ['Settle Up', 'Edit', 'Delete', 'Cancel'];
+    if (Platform.OS === 'ios') {
+      ActionSheetIOS.showActionSheetWithOptions(
+        { options, destructiveButtonIndex: 2, cancelButtonIndex: 3, title: expense.description },
+        (idx) => {
+          if (idx === 0) handleSettleExpense(expense.id);
+          if (idx === 1) router.push({ pathname: '/edit-expense', params: { expenseId: expense.id } });
+          if (idx === 2) Alert.alert('Delete Expense', `Delete "${expense.description}"? This cannot be undone.`, [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Delete', style: 'destructive', onPress: () => handleDeleteExpense(expense.id) },
+          ]);
+        }
+      );
+    } else {
+      Alert.alert(expense.description, undefined, [
+        { text: 'Settle Up', onPress: () => handleSettleExpense(expense.id) },
+        { text: 'Edit', onPress: () => router.push({ pathname: '/edit-expense', params: { expenseId: expense.id } }) },
+        { text: 'Delete', style: 'destructive', onPress: () => Alert.alert('Delete Expense', `Delete "${expense.description}"?`, [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Delete', style: 'destructive', onPress: () => handleDeleteExpense(expense.id) },
+        ])},
+        { text: 'Cancel', style: 'cancel' },
+      ]);
+    }
+  }
 
   async function handleDeleteExpense(expenseId: string) {
     // Delete splits first, then the expense
@@ -212,14 +244,23 @@ export default function GroupDetailScreen() {
             <Text style={s.emptySub}>Tap "+ Expense" to start tracking</Text>
           </View>
         ) : expenses.map((e) => (
-          <SwipeableExpenseRow
+          <TouchableOpacity
             key={e.id}
-            expense={e}
-            currency={(e as any).currency ?? dominantCurrency}
-            onDelete={handleDeleteExpense}
-            t={t}
-            s={s}
-          />
+            style={[s.expenseCard, { marginBottom: 8 }]}
+            onLongPress={() => showExpenseActions(e)}
+            onPress={() => router.push({ pathname: '/expense-detail', params: { expenseId: e.id } })}
+            delayLongPress={350}
+            activeOpacity={0.7}
+          >
+            <View style={s.expenseIcon}>
+              <Text>{CATEGORY_ICONS[(e as any).category] ?? '📦'}</Text>
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={s.expenseTitle}>{e.description}</Text>
+              <Text style={s.expenseSub}>{(e as any).payer?.full_name ?? 'Unknown'} · {formatDate(e.date)}</Text>
+            </View>
+            <Text style={s.expenseAmount}>{formatCurrency(e.amount, (e as any).currency ?? dominantCurrency)}</Text>
+          </TouchableOpacity>
         ))}
       </ScrollView>
     </SafeAreaView>
@@ -399,89 +440,6 @@ function CreateGroupScreen() {
         )}
       </ScrollView>
     </SafeAreaView>
-  );
-}
-
-// ── Swipeable expense row ─────────────────────────────────────────────────────
-
-const DELETE_THRESHOLD = 80;
-
-function SwipeableExpenseRow({
-  expense,
-  currency,
-  onDelete,
-  t,
-  s,
-}: {
-  expense: any;
-  currency: string;
-  onDelete: (id: string) => void;
-  t: ThemeColors;
-  s: ReturnType<typeof makeStyles>;
-}) {
-  const translateX = useRef(new Animated.Value(0)).current;
-
-  const panResponder = useRef(
-    PanResponder.create({
-      onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dx) > 8 && Math.abs(g.dy) < 20,
-      onPanResponderMove: (_, g) => {
-        if (g.dx < 0) translateX.setValue(Math.max(g.dx, -DELETE_THRESHOLD - 10));
-      },
-      onPanResponderRelease: (_, g) => {
-        if (g.dx < -DELETE_THRESHOLD / 2) {
-          // Snap open
-          Animated.spring(translateX, { toValue: -DELETE_THRESHOLD, useNativeDriver: true }).start();
-        } else {
-          // Snap closed
-          Animated.spring(translateX, { toValue: 0, useNativeDriver: true }).start();
-        }
-      },
-    })
-  ).current;
-
-  function snapClose() {
-    Animated.spring(translateX, { toValue: 0, useNativeDriver: true }).start();
-  }
-
-  function confirmDelete() {
-    Alert.alert(
-      'Delete Expense',
-      `Delete "${expense.description}"? This cannot be undone.`,
-      [
-        { text: 'Cancel', style: 'cancel', onPress: snapClose },
-        { text: 'Delete', style: 'destructive', onPress: () => { snapClose(); onDelete(expense.id); } },
-      ]
-    );
-  }
-
-  return (
-    <View style={{ overflow: 'hidden', marginBottom: 8 }}>
-      {/* Delete action revealed behind */}
-      <View style={{
-        position: 'absolute', right: 0, top: 0, bottom: 0,
-        width: DELETE_THRESHOLD, backgroundColor: t.danger,
-        borderRadius: 12, alignItems: 'center', justifyContent: 'center', gap: 4,
-      }}>
-        <TouchableOpacity onPress={confirmDelete} style={{ alignItems: 'center', gap: 4 }} activeOpacity={0.8}>
-          <Ionicons name="trash-outline" size={20} color="#fff" />
-          <Text style={{ color: '#fff', fontSize: 11, fontWeight: '700' }}>Delete</Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* Draggable row */}
-      <Animated.View style={{ transform: [{ translateX }] }} {...panResponder.panHandlers}>
-        <View style={s.expenseCard}>
-          <View style={s.expenseIcon}>
-            <Text>{CATEGORY_ICONS[expense.category] ?? '📦'}</Text>
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={s.expenseTitle}>{expense.description}</Text>
-            <Text style={s.expenseSub}>{expense.payer?.full_name ?? 'Unknown'} · {formatDate(expense.date)}</Text>
-          </View>
-          <Text style={s.expenseAmount}>{formatCurrency(expense.amount, currency)}</Text>
-        </View>
-      </Animated.View>
-    </View>
   );
 }
 

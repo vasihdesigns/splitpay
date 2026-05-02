@@ -5,7 +5,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, ActivityIndicator,
-  StyleSheet, RefreshControl, Alert, Share, Modal,
+  StyleSheet, RefreshControl, Alert, Share, Modal, ActionSheetIOS, Platform,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -67,27 +67,98 @@ export default function FriendDetailScreen() {
   async function fetchExpenses() {
     if (!user || !userId) { setLoading(false); return; }
 
-    const { data: theirSplits } = await supabase
-      .from('expense_splits').select('expense_id, amount, paid').eq('user_id', userId);
-    const { data: mySplits } = await supabase
+    // ── A: I paid → find friend's splits on my expenses ──────────────────
+    const { data: myPaidExpenses } = await supabase
+      .from('expenses')
+      .select('id, description, amount, currency, date, paid_by')
+      .eq('paid_by', user.id);
+
+    const myPaidIds = (myPaidExpenses ?? []).map((e: any) => e.id);
+    const theirSplitsOnMine: Record<string, { amount: number; paid: boolean }> = {};
+    if (myPaidIds.length) {
+      const { data } = await supabase
+        .from('expense_splits').select('expense_id, amount, paid')
+        .in('expense_id', myPaidIds).eq('user_id', userId);
+      (data ?? []).forEach((s: any) => {
+        theirSplitsOnMine[s.expense_id] = { amount: Number(s.amount), paid: s.paid };
+      });
+    }
+
+    // ── B: friend paid → find my splits on their expenses ────────────────
+    const { data: theirPaidExpenses } = await supabase
+      .from('expenses')
+      .select('id, description, amount, currency, date, paid_by')
+      .eq('paid_by', userId);
+
+    const theirPaidIds = (theirPaidExpenses ?? []).map((e: any) => e.id);
+    const mySplitsOnTheirs: Record<string, { amount: number; paid: boolean }> = {};
+    if (theirPaidIds.length) {
+      const { data } = await supabase
+        .from('expense_splits').select('expense_id, amount, paid')
+        .in('expense_id', theirPaidIds).eq('user_id', user.id);
+      (data ?? []).forEach((s: any) => {
+        mySplitsOnTheirs[s.expense_id] = { amount: Number(s.amount), paid: s.paid };
+      });
+    }
+
+    // ── C: group/third-payer expenses where both have split rows ──────────
+    const { data: mySplitsAll } = await supabase
       .from('expense_splits').select('expense_id, amount, paid').eq('user_id', user.id);
+    const myMiscSplits: Record<string, { amount: number; paid: boolean }> = {};
+    const mySplitIdSet = new Set<string>();
+    (mySplitsAll ?? []).forEach((s: any) => {
+      myMiscSplits[s.expense_id] = { amount: Number(s.amount), paid: s.paid };
+      mySplitIdSet.add(s.expense_id);
+    });
 
-    const theirIds  = new Set((theirSplits ?? []).map((s: any) => s.expense_id));
-    const myIds     = new Set((mySplits    ?? []).map((s: any) => s.expense_id));
-    const sharedIds = [...theirIds].filter(id => myIds.has(id));
+    const { data: theirSplitsAll } = await supabase
+      .from('expense_splits').select('expense_id, amount, paid').eq('user_id', userId);
+    const theirMiscSplits: Record<string, { amount: number; paid: boolean }> = {};
+    (theirSplitsAll ?? []).forEach((s: any) => {
+      theirMiscSplits[s.expense_id] = { amount: Number(s.amount), paid: s.paid };
+    });
 
-    if (!sharedIds.length) { setExpenses([]); setLoading(false); setRefreshing(false); return; }
+    const coveredByPayer = new Set([...myPaidIds, ...theirPaidIds]);
+    const sharedViaGroupSplits = Object.keys(theirMiscSplits)
+      .filter(id => mySplitIdSet.has(id) && !coveredByPayer.has(id));
 
-    const { data: expenseData } = await supabase
-      .from('expenses').select('id, description, amount, currency, date, paid_by')
-      .in('id', sharedIds).order('date', { ascending: false });
+    // ── Merge into unified maps ───────────────────────────────────────────
+    const myMap:    Record<string, { amount: number; paid: boolean }> = {
+      ...myMiscSplits, ...mySplitsOnTheirs,
+    };
+    const theirMap: Record<string, { amount: number; paid: boolean }> = {
+      ...theirMiscSplits, ...theirSplitsOnMine,
+    };
 
-    if (!expenseData) { setLoading(false); setRefreshing(false); return; }
+    // For payer rows, derive the payer's implied share = expense.amount − other splits
+    // We'll handle this in the row renderer using paid_by directly.
 
-    const myMap:    Record<string, { amount: number; paid: boolean }> = {};
-    const theirMap: Record<string, { amount: number; paid: boolean }> = {};
-    (mySplits    ?? []).forEach((s: any) => { myMap[s.expense_id]    = { amount: s.amount, paid: s.paid }; });
-    (theirSplits ?? []).forEach((s: any) => { theirMap[s.expense_id] = { amount: s.amount, paid: s.paid }; });
+    const allSharedIds = new Set([
+      ...Object.keys(theirSplitsOnMine),
+      ...Object.keys(mySplitsOnTheirs),
+      ...sharedViaGroupSplits,
+    ]);
+
+    if (!allSharedIds.size) { setExpenses([]); setLoading(false); setRefreshing(false); return; }
+
+    // Build expense metadata map
+    const expenseMetaMap: Record<string, any> = {};
+    [...(myPaidExpenses ?? []), ...(theirPaidExpenses ?? [])].forEach((e: any) => {
+      expenseMetaMap[e.id] = e;
+    });
+
+    if (sharedViaGroupSplits.length) {
+      const { data } = await supabase
+        .from('expenses').select('id, description, amount, currency, date, paid_by')
+        .in('id', sharedViaGroupSplits);
+      (data ?? []).forEach((e: any) => { expenseMetaMap[e.id] = e; });
+    }
+
+    const expenseData = [...allSharedIds]
+      .map(id => expenseMetaMap[id]).filter(Boolean)
+      .sort((a: any, b: any) => b.date.localeCompare(a.date));
+
+    if (!expenseData.length) { setLoading(false); setRefreshing(false); return; }
 
     let net = 0;
     const rows: ExpenseRow[] = expenseData.map((e: any) => {
@@ -110,6 +181,44 @@ export default function FriendDetailScreen() {
     setCurrency(dominant);
     setLoading(false);
     setRefreshing(false);
+  }
+
+  async function handleDelete(expenseId: string) {
+    await supabase.from('expense_splits').delete().eq('expense_id', expenseId);
+    await supabase.from('expenses').delete().eq('id', expenseId);
+    fetchExpenses();
+  }
+
+  async function handleSettleUp(expenseId: string) {
+    await supabase.from('expense_splits').update({ paid: true }).eq('expense_id', expenseId);
+    fetchExpenses();
+  }
+
+  function showActionSheet(e: ExpenseRow) {
+    const options = ['Settle Up', 'Edit', 'Delete', 'Cancel'];
+    if (Platform.OS === 'ios') {
+      ActionSheetIOS.showActionSheetWithOptions(
+        { options, destructiveButtonIndex: 2, cancelButtonIndex: 3, title: e.description },
+        (idx) => {
+          if (idx === 0) handleSettleUp(e.id);
+          if (idx === 1) router.push({ pathname: '/edit-expense', params: { expenseId: e.id } });
+          if (idx === 2) Alert.alert('Delete Expense', `Delete "${e.description}"? This cannot be undone.`, [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Delete', style: 'destructive', onPress: () => handleDelete(e.id) },
+          ]);
+        }
+      );
+    } else {
+      Alert.alert(e.description, undefined, [
+        { text: 'Settle Up', onPress: () => handleSettleUp(e.id) },
+        { text: 'Edit', onPress: () => router.push({ pathname: '/edit-expense', params: { expenseId: e.id } }) },
+        { text: 'Delete', style: 'destructive', onPress: () => Alert.alert('Delete Expense', `Delete "${e.description}"?`, [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Delete', style: 'destructive', onPress: () => handleDelete(e.id) },
+        ])},
+        { text: 'Cancel', style: 'cancel' },
+      ]);
+    }
   }
 
   async function handleSettleAll() {
@@ -284,9 +393,14 @@ export default function FriendDetailScreen() {
                 const lent     = iPaid   ? e.theirShare : 0;
                 const borrowed = !iPaid  ? e.myShare    : 0;
                 return (
-                  <TouchableOpacity key={e.id} style={s.expRow}
+                  <TouchableOpacity
+                    key={e.id}
+                    style={s.expRow}
                     onPress={() => router.push({ pathname: '/expense-detail', params: { expenseId: e.id, friendId: userId, friendName: name } })}
-                    activeOpacity={0.7}>
+                    onLongPress={() => showActionSheet(e)}
+                    delayLongPress={350}
+                    activeOpacity={0.7}
+                  >
                     <View style={s.expDate}>
                       <Text style={s.expDateMon}>{mon}</Text>
                       <Text style={s.expDateDay}>{day}</Text>
