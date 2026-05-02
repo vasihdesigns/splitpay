@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useState } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, ActivityIndicator,
-  RefreshControl, StyleSheet, Modal,
+  RefreshControl, StyleSheet, Modal, TextInput,
 } from 'react-native';
 
 type GroupFilter = 'none' | 'outstanding' | 'you-owe' | 'owe-you';
@@ -239,24 +239,63 @@ export default function GroupsScreen() {
   const totalOwed = groups.reduce((s, g) => (g.balance ?? 0) >  0.01 ? s + (g.balance ?? 0) : s, 0);
   const dominantCurrency = groups[0]?.currency ?? 'USD';
 
+  const [showSearch, setShowSearch] = useState(false);
+  const [search,     setSearch]     = useState('');
+
   return (
     <SafeAreaView style={[s.screen, { backgroundColor: t.bg }]}>
       {/* Header */}
       <View style={s.topBar}>
-        <Text style={s.pageTitle}>Groups</Text>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+        <TouchableOpacity onPress={() => setShowSearch(v => !v)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+          <Ionicons name="search-outline" size={22} color={t.text} />
+        </TouchableOpacity>
+        <TouchableOpacity onPress={() => router.push('/group/new')} activeOpacity={0.75}>
+          <Text style={s.headerAction}>Create group</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Search bar */}
+      {showSearch && (
+        <View style={s.searchWrap}>
+          <Ionicons name="search-outline" size={16} color={t.placeholder} style={{ marginRight: 8 }} />
+          <TextInput
+            style={s.searchInput}
+            placeholder="Search groups…"
+            placeholderTextColor={t.placeholder}
+            value={search}
+            onChangeText={setSearch}
+            autoCapitalize="none"
+            clearButtonMode="while-editing"
+            autoFocus
+          />
+        </View>
+      )}
+
+      {/* Overall balance + filter */}
+      {!loading && (totalOwe > 0 || totalOwed > 0) && (
+        <View style={s.overallRow}>
+          <View style={{ flex: 1 }}>
+            {totalOwe > 0 && (
+              <Text style={s.overallText}>
+                Overall, you owe <Text style={s.overallOwe}>{formatCurrency(totalOwe, dominantCurrency)}</Text>
+              </Text>
+            )}
+            {totalOwed > 0 && (
+              <Text style={s.overallText}>
+                {totalOwe > 0 ? 'and ' : 'Overall, '}you are owed{' '}
+                <Text style={s.overallOwed}>{formatCurrency(totalOwed, dominantCurrency)}</Text>
+              </Text>
+            )}
+          </View>
           <TouchableOpacity
             style={[s.filterBtn, filter !== 'none' && { backgroundColor: t.primary }]}
             onPress={() => setShowFilterSheet(true)}
             activeOpacity={0.8}
           >
-            <Ionicons name="options-outline" size={18} color={filter !== 'none' ? '#fff' : t.primary} />
-          </TouchableOpacity>
-          <TouchableOpacity style={s.newBtn} onPress={() => router.push('/group/new')}>
-            <Text style={s.newBtnText}>Create group</Text>
+            <Ionicons name="options-outline" size={18} color={filter !== 'none' ? '#fff' : t.subtext} />
           </TouchableOpacity>
         </View>
-      </View>
+      )}
 
       {/* Active filter pill */}
       {filter !== 'none' && (
@@ -267,23 +306,6 @@ export default function GroupsScreen() {
           <TouchableOpacity onPress={() => setFilter('none')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
             <Ionicons name="close-circle" size={16} color={t.primary} />
           </TouchableOpacity>
-        </View>
-      )}
-
-      {/* Overall balance summary */}
-      {!loading && (totalOwe > 0 || totalOwed > 0) && (
-        <View style={s.overallRow}>
-          {totalOwe > 0 && (
-            <Text style={s.overallText}>
-              Overall, you owe <Text style={s.overallOwe}>{formatCurrency(totalOwe, dominantCurrency)}</Text>
-              {totalOwed > 0 ? '  ' : ''}
-            </Text>
-          )}
-          {totalOwed > 0 && (
-            <Text style={s.overallText}>
-              {totalOwe > 0 ? 'and ' : 'Overall, '}you are owed <Text style={s.overallOwed}>{formatCurrency(totalOwed, dominantCurrency)}</Text>
-            </Text>
-          )}
         </View>
       )}
 
@@ -318,21 +340,21 @@ export default function GroupsScreen() {
                 {active.map((g) => (
                   <GroupCard key={g.id} group={g} onPress={() => router.push(`/group/${g.id}`)} />
                 ))}
-                {settled.length > 0 && (
+                {settled.length > 0 && !showSettled && (
                   <View style={s.settledSection}>
                     <Text style={s.settledNote}>
-                      Hiding {settled.length} settled group{settled.length !== 1 ? 's' : ''}
+                      Hiding groups you settled up with over 7 days ago
                     </Text>
-                    <TouchableOpacity style={s.showSettledBtn} onPress={() => setShowSettled((v) => !v)}>
+                    <TouchableOpacity style={s.showSettledBtn} onPress={() => setShowSettled(true)}>
                       <Text style={s.showSettledText}>
-                        {showSettled ? 'Hide' : `Show ${settled.length}`}
+                        Show {settled.length} settled-up group{settled.length !== 1 ? 's' : ''}
                       </Text>
                     </TouchableOpacity>
-                    {showSettled && settled.map((g) => (
-                      <GroupCard key={g.id} group={g} onPress={() => router.push(`/group/${g.id}`)} />
-                    ))}
                   </View>
                 )}
+                {showSettled && settled.map((g) => (
+                  <GroupCard key={g.id} group={g} onPress={() => router.push(`/group/${g.id}`)} />
+                ))}
               </>
             )}
 
@@ -359,7 +381,7 @@ export default function GroupsScreen() {
                 <Text style={s.emptyTitle}>No groups yet</Text>
                 <Text style={s.emptySub}>Create a group or add a shared expense with 3+ people</Text>
                 <TouchableOpacity style={s.emptyBtn} onPress={() => router.push('/group/new')}>
-                  <Text style={s.newBtnText}>Create First Group</Text>
+                  <Text style={{ color: '#fff', fontWeight: '600', fontSize: 15 }}>Create First Group</Text>
                 </TouchableOpacity>
               </View>
             )}
@@ -399,21 +421,29 @@ export default function GroupsScreen() {
 function makeStyles(t: ThemeColors) {
   return StyleSheet.create({
     screen:          { flex: 1, backgroundColor: t.bg },
-    topBar:          { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingTop: 16, paddingBottom: 12, backgroundColor: t.card, borderBottomWidth: 1, borderBottomColor: t.border },
-    pageTitle:       { color: t.text, fontSize: 24, fontWeight: 'bold' },
-    filterBtn:       { width: 36, height: 36, borderRadius: 18, backgroundColor: t.primaryBg,
-                       alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderColor: t.primary },
-    newBtn:          { backgroundColor: t.primary, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 8 },
-    newBtnText:      { color: '#ffffff', fontWeight: '600', fontSize: 14 },
+    topBar:          { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+                       paddingHorizontal: 20, paddingTop: 16, paddingBottom: 12 },
+    headerAction:    { color: t.primary, fontSize: 16, fontWeight: '600' },
+    filterBtn:       { width: 36, height: 36, borderRadius: 18,
+                       alignItems: 'center', justifyContent: 'center' },
     activeFilterRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginHorizontal: 20,
                        marginTop: 8, marginBottom: 2, backgroundColor: t.primaryBg, borderRadius: 20,
                        paddingHorizontal: 12, paddingVertical: 6, alignSelf: 'flex-start' },
     activeFilterText:{ fontSize: 12, fontWeight: '600', color: t.primary, flexShrink: 1 },
-    overallRow:      { paddingHorizontal: 20, paddingVertical: 14, backgroundColor: t.card, borderBottomWidth: 1, borderBottomColor: t.borderStrong },
-    overallText:     { color: t.subtext, fontSize: 14, lineHeight: 22 },
+    searchWrap:      { flexDirection: 'row', alignItems: 'center', marginHorizontal: 20,
+                       marginTop: 4, marginBottom: 4, backgroundColor: t.card, borderRadius: 12,
+                       paddingHorizontal: 12, paddingVertical: 10,
+                       borderWidth: 1, borderColor: t.border },
+    searchInput:     { flex: 1, fontSize: 14, color: t.text },
+    overallRow:      { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20,
+                       paddingVertical: 14, borderBottomWidth: StyleSheet.hairlineWidth,
+                       borderBottomColor: t.border },
+    overallText:     { fontSize: 15, fontWeight: '600', color: t.text, lineHeight: 22 },
     overallOwe:      { color: t.danger, fontWeight: '700' },
     overallOwed:     { color: t.success, fontWeight: '700' },
-    card:            { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 16, backgroundColor: t.card, borderBottomWidth: 1, borderBottomColor: t.border },
+    card:            { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+                       paddingHorizontal: 20, paddingVertical: 16,
+                       borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: t.border },
     cardLeft:        { flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 },
     iconBox:         { width: 48, height: 48, borderRadius: 12, backgroundColor: t.primaryBg, alignItems: 'center', justifyContent: 'center' },
     cardTitle:       { color: t.text, fontWeight: 'bold', fontSize: 16 },
@@ -421,13 +451,15 @@ function makeStyles(t: ThemeColors) {
     settled:         { color: t.placeholder, fontSize: 13, fontWeight: '500' },
     balanceLabel:    { color: t.subtext, fontSize: 11 },
     balanceAmount:   { fontWeight: 'bold', fontSize: 15, marginTop: 2 },
-    settledSection:  { paddingHorizontal: 20, paddingVertical: 16, alignItems: 'center', borderTopWidth: 1, borderTopColor: t.borderStrong, marginTop: 8 },
-    settledNote:     { color: t.subtext, fontSize: 13, marginBottom: 8 },
-    showSettledBtn:  { borderWidth: 1, borderColor: t.primary, borderRadius: 20, paddingHorizontal: 20, paddingVertical: 8 },
-    showSettledText: { color: t.primary, fontWeight: '600', fontSize: 14 },
+    settledSection:  { alignItems: 'center', paddingVertical: 20, paddingHorizontal: 20,
+                       borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: t.border, marginTop: 4 },
+    settledNote:     { color: t.subtext, fontSize: 13, marginBottom: 14, textAlign: 'center' },
+    showSettledBtn:  { borderWidth: 1.5, borderColor: t.primary, borderRadius: 14,
+                       paddingHorizontal: 24, paddingVertical: 14, width: '100%', alignItems: 'center' },
+    showSettledText: { color: t.primary, fontWeight: '600', fontSize: 15 },
     sectionHeader:     { paddingHorizontal: 20, paddingTop: 16, paddingBottom: 6 },
     sectionHeaderText: { color: t.subtext, fontSize: 12, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.8 },
-    empty:           { alignItems: 'center', marginTop: 80 },
+    empty:           { alignItems: 'center', marginTop: 80, paddingHorizontal: 40 },
     emptyTitle:      { color: t.text, fontWeight: 'bold', fontSize: 18 },
     emptySub:        { color: t.subtext, fontSize: 14, marginTop: 8, textAlign: 'center' },
     emptyBtn:        { marginTop: 24, backgroundColor: t.primary, borderRadius: 12, paddingHorizontal: 24, paddingVertical: 12 },

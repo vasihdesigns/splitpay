@@ -120,6 +120,8 @@ export default function FriendsScreen() {
   const [loading,         setLoading]         = useState(true);
   const [refreshing,      setRefreshing]      = useState(false);
   const [search,          setSearch]          = useState('');
+  const [showSearch,      setShowSearch]      = useState(false);
+  const [showSettled,     setShowSettled]      = useState(false);
   const [filter,          setFilter]          = useState<FriendFilter>('none');
   const [showFilterSheet, setShowFilterSheet] = useState(false);
 
@@ -259,26 +261,66 @@ export default function FriendsScreen() {
   const active  = filterApplied.filter(p => Math.abs(p.netAmount) > 0.01);
   const settled = filter === 'none' ? filterApplied.filter(p => Math.abs(p.netAmount) <= 0.01) : [];
 
+  const totalOwe  = people.reduce((sum, p) => p.netAmount < -0.01 ? sum + Math.abs(p.netAmount) : sum, 0);
+  const totalOwed = people.reduce((sum, p) => p.netAmount >  0.01 ? sum + p.netAmount : sum, 0);
+  const dominantCurrency = people[0]?.currency ?? 'USD';
+
   // ── render ─────────────────────────────────────────────────────────────────
 
   return (
     <SafeAreaView style={[s.screen, { backgroundColor: t.bg }]}>
       {/* Header */}
       <View style={s.header}>
-        <Text style={s.title}>Friends</Text>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+        <TouchableOpacity onPress={() => setShowSearch(v => !v)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+          <Ionicons name="search-outline" size={22} color={t.text} />
+        </TouchableOpacity>
+        <TouchableOpacity onPress={() => router.push('/add-friends')} activeOpacity={0.75}>
+          <Text style={s.headerAction}>Add friends</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Search bar — shown on icon tap */}
+      {showSearch && (
+        <View style={s.searchWrap}>
+          <Ionicons name="search-outline" size={16} color={t.placeholder} style={{ marginRight: 8 }} />
+          <TextInput
+            style={s.searchInput}
+            placeholder="Search friends…"
+            placeholderTextColor={t.placeholder}
+            value={search}
+            onChangeText={setSearch}
+            autoCapitalize="none"
+            clearButtonMode="while-editing"
+            autoFocus
+          />
+        </View>
+      )}
+
+      {/* Overall balance + filter */}
+      {!loading && (totalOwe > 0 || totalOwed > 0) && (
+        <View style={s.overallRow}>
+          <View style={{ flex: 1 }}>
+            {totalOwe > 0 && (
+              <Text style={s.overallText}>
+                Overall, you owe <Text style={s.overallOwe}>{formatCurrency(totalOwe, dominantCurrency)}</Text>
+              </Text>
+            )}
+            {totalOwed > 0 && (
+              <Text style={s.overallText}>
+                {totalOwe > 0 ? 'and ' : 'Overall, '}you are owed{' '}
+                <Text style={s.overallOwed}>{formatCurrency(totalOwed, dominantCurrency)}</Text>
+              </Text>
+            )}
+          </View>
           <TouchableOpacity
             style={[s.filterBtn, filter !== 'none' && { backgroundColor: t.primary }]}
             onPress={() => setShowFilterSheet(true)}
             activeOpacity={0.8}
           >
-            <Ionicons name="options-outline" size={18} color={filter !== 'none' ? '#fff' : t.primary} />
-          </TouchableOpacity>
-          <TouchableOpacity style={s.addBtn} onPress={() => router.push('/add-friends')} activeOpacity={0.8}>
-            <Ionicons name="person-add-outline" size={18} color="#fff" />
+            <Ionicons name="options-outline" size={18} color={filter !== 'none' ? '#fff' : t.subtext} />
           </TouchableOpacity>
         </View>
-      </View>
+      )}
 
       {/* Active filter pill */}
       {filter !== 'none' && (
@@ -291,20 +333,6 @@ export default function FriendsScreen() {
           </TouchableOpacity>
         </View>
       )}
-
-      {/* Search */}
-      <View style={s.searchWrap}>
-        <Ionicons name="search-outline" size={16} color={t.placeholder} style={{ marginRight: 8 }} />
-        <TextInput
-          style={s.searchInput}
-          placeholder="Search friends…"
-          placeholderTextColor={t.placeholder}
-          value={search}
-          onChangeText={setSearch}
-          autoCapitalize="none"
-          clearButtonMode="while-editing"
-        />
-      </View>
 
       {loading ? (
         <ActivityIndicator color={t.primary} style={{ marginTop: 48 }} />
@@ -320,50 +348,53 @@ export default function FriendsScreen() {
             />
           }
         >
-          {/* Outstanding */}
-          {active.length > 0 && (
-            <View style={s.section}>
-              <Text style={s.sectionLabel}>Outstanding</Text>
-              <View style={s.card}>
-                {active.map((p, i) => (
-                  <View key={p.userId}>
-                    <FriendRow
-                      person={p}
-                      t={t}
-                      onPress={() =>
-                        router.push({ pathname: '/friend-detail', params: { userId: p.userId, name: p.name } })
-                      }
-                      onSettle={() =>
-                        router.push({ pathname: '/settle-up', params: { friendId: p.userId, friendName: p.name } })
-                      }
-                    />
-                    {i < active.length - 1 && <View style={s.divider} />}
-                  </View>
-                ))}
-              </View>
+          {/* Active friends — flat list */}
+          {active.map((p, i) => (
+            <View key={p.userId}>
+              <FriendRow
+                person={p}
+                t={t}
+                onPress={() =>
+                  router.push({ pathname: '/friend-detail', params: { userId: p.userId, name: p.name } })
+                }
+                onSettle={() =>
+                  router.push({ pathname: '/settle-up', params: { friendId: p.userId, friendName: p.name } })
+                }
+              />
+              {(i < active.length - 1 || settled.length > 0) && <View style={s.divider} />}
             </View>
-          )}
+          ))}
 
-          {/* Settled */}
+          {/* Settled section toggle */}
           {settled.length > 0 && (
-            <View style={s.section}>
-              <Text style={s.sectionLabel}>Settled up</Text>
-              <View style={s.card}>
-                {settled.map((p, i) => (
-                  <View key={p.userId}>
-                    <FriendRow
-                      person={p}
-                      t={t}
-                      onPress={() =>
-                        router.push({ pathname: '/friend-detail', params: { userId: p.userId, name: p.name } })
-                      }
-                      onSettle={() => {}}
-                    />
-                    {i < settled.length - 1 && <View style={s.divider} />}
-                  </View>
-                ))}
-              </View>
-            </View>
+            <>
+              <TouchableOpacity
+                style={s.settledToggleRow}
+                onPress={() => setShowSettled(v => !v)}
+                activeOpacity={0.7}
+              >
+                <Text style={s.settledToggleText}>
+                  Previously settled friends
+                </Text>
+                <Text style={[s.settledToggleAction, { color: t.primary }]}>
+                  {showSettled ? '· Re-hide' : `· Show (${settled.length})`}
+                </Text>
+              </TouchableOpacity>
+
+              {showSettled && settled.map((p, i) => (
+                <View key={p.userId}>
+                  <FriendRow
+                    person={p}
+                    t={t}
+                    onPress={() =>
+                      router.push({ pathname: '/friend-detail', params: { userId: p.userId, name: p.name } })
+                    }
+                    onSettle={() => {}}
+                  />
+                  {i < settled.length - 1 && <View style={s.divider} />}
+                </View>
+              ))}
+            </>
           )}
 
           {/* Empty */}
@@ -380,17 +411,19 @@ export default function FriendsScreen() {
                   ? 'Try a different name'
                   : 'Add a friend or create a shared expense to get started'}
               </Text>
-              {!search.trim() && (
-                <TouchableOpacity
-                  style={s.emptyBtn}
-                  onPress={() => router.push('/add-friends')}
-                  activeOpacity={0.8}
-                >
-                  <Ionicons name="person-add-outline" size={16} color="#fff" style={{ marginRight: 6 }} />
-                  <Text style={s.emptyBtnText}>Add a Friend</Text>
-                </TouchableOpacity>
-              )}
             </View>
+          )}
+
+          {/* Add more friends button */}
+          {!search.trim() && (
+            <TouchableOpacity
+              style={s.addFriendsBtn}
+              onPress={() => router.push('/add-friends')}
+              activeOpacity={0.75}
+            >
+              <Ionicons name="person-add-outline" size={18} color={t.primary} style={{ marginRight: 8 }} />
+              <Text style={s.addFriendsBtnText}>Add more friends</Text>
+            </TouchableOpacity>
           )}
         </ScrollView>
       )}
@@ -431,31 +464,37 @@ function styles(t: ThemeColors) {
     screen:       { flex: 1 },
 
     header:       { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-                    paddingHorizontal: 20, paddingTop: 16, paddingBottom: 4 },
-    title:        { fontSize: 28, fontWeight: '800', color: t.text },
-    filterBtn:    { width: 38, height: 38, borderRadius: 19, backgroundColor: t.primaryBg,
-                    alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderColor: t.primary },
-    addBtn:       { width: 38, height: 38, borderRadius: 19, backgroundColor: t.primary,
+                    paddingHorizontal: 20, paddingTop: 16, paddingBottom: 12 },
+    headerAction: { fontSize: 16, fontWeight: '600', color: t.primary },
+    filterBtn:    { width: 36, height: 36, borderRadius: 18,
                     alignItems: 'center', justifyContent: 'center' },
+
+    overallRow:   { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20,
+                    paddingVertical: 14, borderBottomWidth: StyleSheet.hairlineWidth,
+                    borderBottomColor: t.border },
+    overallText:  { fontSize: 15, fontWeight: '600', color: t.text, lineHeight: 22 },
+    overallOwe:   { color: t.danger, fontWeight: '700' },
+    overallOwed:  { color: t.success, fontWeight: '700' },
+
     activeFilterRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginHorizontal: 20,
                        marginTop: 8, backgroundColor: t.primaryBg, borderRadius: 20,
                        paddingHorizontal: 12, paddingVertical: 6, alignSelf: 'flex-start' },
     activeFilterText:{ fontSize: 12, fontWeight: '600', color: t.primary, flexShrink: 1 },
 
     searchWrap:   { flexDirection: 'row', alignItems: 'center', marginHorizontal: 20,
-                    marginTop: 12, marginBottom: 4, backgroundColor: t.card, borderRadius: 12,
+                    marginTop: 4, marginBottom: 4, backgroundColor: t.card, borderRadius: 12,
                     paddingHorizontal: 12, paddingVertical: 10,
                     borderWidth: 1, borderColor: t.border },
     searchInput:  { flex: 1, fontSize: 14, color: t.text },
 
-    section:      { marginTop: 20, marginHorizontal: 16 },
-    sectionLabel: { fontSize: 13, fontWeight: '600', color: t.subtext,
-                    textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 8, marginLeft: 4 },
-    card:         { backgroundColor: t.card, borderRadius: 16, overflow: 'hidden',
-                    borderWidth: 1, borderColor: t.border },
-    divider:      { height: StyleSheet.hairlineWidth, backgroundColor: t.border, marginLeft: 72 },
+    divider:      { height: StyleSheet.hairlineWidth, backgroundColor: t.border, marginLeft: 76 },
 
-    row:          { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16,
+    settledToggleRow:   { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20,
+                          paddingVertical: 12, gap: 4 },
+    settledToggleText:  { fontSize: 14, fontWeight: '600', color: t.subtext },
+    settledToggleAction:{ fontSize: 14, fontWeight: '600' },
+
+    row:          { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20,
                     paddingVertical: 14, gap: 12 },
     avatar:       { width: 44, height: 44, borderRadius: 22, alignItems: 'center',
                     justifyContent: 'center', borderWidth: 1.5 },
@@ -475,6 +514,12 @@ function styles(t: ThemeColors) {
     emptyBtn:     { flexDirection: 'row', alignItems: 'center', backgroundColor: t.primary,
                     borderRadius: 12, paddingHorizontal: 20, paddingVertical: 12 },
     emptyBtnText: { color: '#fff', fontSize: 14, fontWeight: '700' },
+
+    addFriendsBtn:     { flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+                         marginHorizontal: 20, marginTop: 16, marginBottom: 8,
+                         borderWidth: 1.5, borderColor: t.primary, borderRadius: 14,
+                         paddingVertical: 16 },
+    addFriendsBtnText: { fontSize: 15, fontWeight: '600', color: t.primary },
 
     // Filter sheet
     sheetOverlay:     { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
