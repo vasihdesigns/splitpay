@@ -158,12 +158,16 @@ export default function EditExpenseScreen() {
 
     setSaving(true);
 
-    const { error: expErr } = await supabase
+    const { error: expErr, data: updatedExpense } = await supabase
       .from('expenses')
       .update({ description: description.trim(), amount: total, currency, paid_by: paidByUserId })
-      .eq('id', expenseId);
+      .eq('id', expenseId)
+      .select('id');
 
-    if (expErr) { Alert.alert('Error', expErr.message); setSaving(false); return; }
+    if (expErr || !updatedExpense?.length) {
+      Alert.alert('Error', expErr?.message ?? 'Could not update expense. You may not have permission to edit this one.');
+      setSaving(false); return;
+    }
 
     const currentIds = new Set(members.map(m => m.user_id));
 

@@ -126,7 +126,6 @@ function MonthPickerModal({
   onClose,
   filterYear,
   filterMonth,
-  filterAllTime,
   netBalance,
   currency,
   onApply,
@@ -136,20 +135,18 @@ function MonthPickerModal({
   onClose: () => void;
   filterYear: number;
   filterMonth: number;
-  filterAllTime: boolean;
   netBalance: number;
   currency: string;
-  onApply: (year: number, month: number, allTime: boolean) => void;
+  onApply: (year: number, month: number) => void;
   t: ThemeColors;
 }) {
   const currentYear = new Date().getFullYear();
-  const [pYear,    setPYear]    = useState(filterYear);
-  const [pMonth,   setPMonth]   = useState(filterMonth);
-  const [pAllTime, setPAllTime] = useState(filterAllTime);
+  const [pYear,  setPYear]  = useState(filterYear);
+  const [pMonth, setPMonth] = useState(filterMonth);
 
   // Sync when reopened
   useEffect(() => {
-    if (visible) { setPYear(filterYear); setPMonth(filterMonth); setPAllTime(filterAllTime); }
+    if (visible) { setPYear(filterYear); setPMonth(filterMonth); }
   }, [visible]);
 
   const years = Array.from({ length: 4 }, (_, i) => currentYear - 2 + i).filter(y => y <= currentYear);
@@ -173,29 +170,19 @@ function MonthPickerModal({
           </TouchableOpacity>
         </View>
 
-        {/* All Time | Year pills */}
+        {/* Year pills */}
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 24, gap: 8, paddingBottom: 20 }}>
-          <TouchableOpacity
-            onPress={() => setPAllTime(true)}
-            style={{
-              paddingHorizontal: 20, paddingVertical: 10, borderRadius: 22,
-              backgroundColor: pAllTime ? t.text : t.card,
-              borderWidth: 1, borderColor: pAllTime ? t.text : t.border,
-            }}
-          >
-            <Text style={{ fontSize: 15, fontWeight: '600', color: pAllTime ? t.bg : t.text }}>All Time</Text>
-          </TouchableOpacity>
           {years.map(y => (
             <TouchableOpacity
               key={y}
-              onPress={() => { setPAllTime(false); setPYear(y); }}
+              onPress={() => setPYear(y)}
               style={{
                 paddingHorizontal: 20, paddingVertical: 10, borderRadius: 22,
-                backgroundColor: !pAllTime && pYear === y ? t.text : t.card,
-                borderWidth: 1, borderColor: !pAllTime && pYear === y ? t.text : t.border,
+                backgroundColor: pYear === y ? t.text : t.card,
+                borderWidth: 1, borderColor: pYear === y ? t.text : t.border,
               }}
             >
-              <Text style={{ fontSize: 15, fontWeight: '600', color: !pAllTime && pYear === y ? t.bg : t.text }}>
+              <Text style={{ fontSize: 15, fontWeight: '600', color: pYear === y ? t.bg : t.text }}>
                 {y}
               </Text>
             </TouchableOpacity>
@@ -203,51 +190,49 @@ function MonthPickerModal({
         </ScrollView>
 
         {/* Month grid */}
-        {!pAllTime && (
-          <View style={{ marginHorizontal: 16, borderRadius: 20, backgroundColor: t.card, borderWidth: 1, borderColor: t.border, overflow: 'hidden' }}>
-            {[0, 1, 2, 3].map(row => (
-              <View key={row} style={{ flexDirection: 'row', borderBottomWidth: row < 3 ? 1 : 0, borderBottomColor: t.border }}>
-                {[0, 1, 2].map(col => {
-                  const mi = row * 3 + col;
-                  const isSel = pMonth === mi;
-                  return (
-                    <TouchableOpacity
-                      key={col}
-                      onPress={() => setPMonth(mi)}
-                      activeOpacity={0.75}
-                      style={{
-                        flex: 1,
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        paddingVertical: 20,
-                        borderRightWidth: col < 2 ? 1 : 0,
-                        borderRightColor: t.border,
-                        backgroundColor: isSel ? t.danger : 'transparent',
-                        margin: isSel ? 4 : 0,
-                        borderRadius: isSel ? 14 : 0,
-                      }}
-                    >
-                      <Text style={{ fontSize: 16, fontWeight: isSel ? '700' : '500', color: isSel ? '#fff' : t.text }}>
-                        {MONTH_NAMES[mi]}
+        <View style={{ marginHorizontal: 16, borderRadius: 20, backgroundColor: t.card, borderWidth: 1, borderColor: t.border, overflow: 'hidden' }}>
+          {[0, 1, 2, 3].map(row => (
+            <View key={row} style={{ flexDirection: 'row', borderBottomWidth: row < 3 ? 1 : 0, borderBottomColor: t.border }}>
+              {[0, 1, 2].map(col => {
+                const mi = row * 3 + col;
+                const isSel = pMonth === mi;
+                return (
+                  <TouchableOpacity
+                    key={col}
+                    onPress={() => setPMonth(mi)}
+                    activeOpacity={0.75}
+                    style={{
+                      flex: 1,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      paddingVertical: 20,
+                      borderRightWidth: col < 2 ? 1 : 0,
+                      borderRightColor: t.border,
+                      backgroundColor: isSel ? t.danger : 'transparent',
+                      margin: isSel ? 4 : 0,
+                      borderRadius: isSel ? 14 : 0,
+                    }}
+                  >
+                    <Text style={{ fontSize: 16, fontWeight: isSel ? '700' : '500', color: isSel ? '#fff' : t.text }}>
+                      {MONTH_NAMES[mi]}
+                    </Text>
+                    {isSel && (
+                      <Text style={{ fontSize: 11, color: 'rgba(255,255,255,0.85)', marginTop: 3, fontWeight: '600' }}>
+                        {netBalance < -0.01 ? '−' : netBalance > 0.01 ? '+' : ''}{formatCurrency(Math.abs(netBalance), currency)}
                       </Text>
-                      {isSel && (
-                        <Text style={{ fontSize: 11, color: 'rgba(255,255,255,0.85)', marginTop: 3, fontWeight: '600' }}>
-                          {netBalance < -0.01 ? '−' : netBalance > 0.01 ? '+' : ''}{formatCurrency(Math.abs(netBalance), currency)}
-                        </Text>
-                      )}
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-            ))}
-          </View>
-        )}
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          ))}
+        </View>
 
         <View style={{ flex: 1 }} />
 
         {/* Apply */}
         <TouchableOpacity
-          onPress={() => { onApply(pYear, pMonth, pAllTime); onClose(); }}
+          onPress={() => { onApply(pYear, pMonth); onClose(); }}
           activeOpacity={0.85}
           style={{
             marginHorizontal: 24, marginBottom: 40, backgroundColor: t.danger,
@@ -367,7 +352,6 @@ export default function DashboardScreen() {
   // ── Month filter ────────────────────────────────────────────────────────────
   const [filterYear,      setFilterYear]      = useState(now.getFullYear());
   const [filterMonth,     setFilterMonth]     = useState(now.getMonth());
-  const [filterAllTime,   setFilterAllTime]   = useState(true);
   const [showMonthPicker, setShowMonthPicker] = useState(false);
 
   // ── Data fetch ─────────────────────────────────────────────────────────────
@@ -379,13 +363,9 @@ export default function DashboardScreen() {
     if (!user?.id) { setLoading(false); setRefreshing(false); return; }
     if (!isRefresh) setLoading(true);
 
-    // Compute optional date range from filter
-    let dateStart: string | null = null;
-    let dateEnd:   string | null = null;
-    if (!filterAllTime) {
-      dateStart = new Date(filterYear, filterMonth, 1).toISOString().split('T')[0];
-      dateEnd   = new Date(filterYear, filterMonth + 1, 0).toISOString().split('T')[0];
-    }
+    // Date range always applied (no "All time" mode)
+    const dateStart = new Date(filterYear, filterMonth, 1).toISOString().split('T')[0];
+    const dateEnd   = new Date(filterYear, filterMonth + 1, 0).toISOString().split('T')[0];
 
     try {
       // 1. My unpaid splits (what I owe)
@@ -399,8 +379,7 @@ export default function DashboardScreen() {
       const oweExpenseIds = myUnpaid?.map((s: any) => s.expense_id) ?? [];
 
       // 2. Expenses I paid for (filtered by date)
-      let myExpQ = supabase.from('expenses').select('id, group_id, currency').eq('paid_by', user.id);
-      if (dateStart) myExpQ = (myExpQ as any).gte('date', dateStart).lte('date', dateEnd);
+      const myExpQ = supabase.from('expenses').select('id, group_id, currency').eq('paid_by', user.id).gte('date', dateStart).lte('date', dateEnd);
       const { data: myExpenses, error: e2 } = await myExpQ;
       if (e2) console.error('myExpenses:', e2);
 
@@ -516,7 +495,7 @@ export default function DashboardScreen() {
   fetchBalancesRef.current = fetchBalances;
 
   useEffect(() => { if (user?.id) fetchBalances(); }, [user?.id]);
-  useEffect(() => { if (user?.id) fetchBalances(); }, [filterYear, filterMonth, filterAllTime]);
+  useEffect(() => { if (user?.id) fetchBalances(); }, [filterYear, filterMonth]);
   useFocusEffect(useCallback(() => { fetchBalancesRef.current(); }, []));
 
   // ── Derived ────────────────────────────────────────────────────────────────
@@ -554,9 +533,6 @@ export default function DashboardScreen() {
               : 'All settled'}
           </Text>
         </View>
-        <TouchableOpacity onPress={() => router.push('/add-expense')} style={s.headerAddBtn}>
-          <Ionicons name="add" size={22} color="#fff" />
-        </TouchableOpacity>
       </View>
 
       {/* ── Net balance display ── */}
@@ -575,7 +551,7 @@ export default function DashboardScreen() {
         >
           <Ionicons name="calendar-outline" size={13} color={t.subtext} />
           <Text style={[s.filterPillText, { color: t.text }]}>
-            {filterAllTime ? 'All time' : `${MONTH_NAMES[filterMonth]} ${filterYear}`}
+            {`${MONTH_FULL[filterMonth]} ${filterYear}`}
           </Text>
           <Ionicons name="chevron-expand" size={13} color={t.subtext} />
         </TouchableOpacity>
@@ -693,10 +669,9 @@ export default function DashboardScreen() {
         onClose={() => setShowMonthPicker(false)}
         filterYear={filterYear}
         filterMonth={filterMonth}
-        filterAllTime={filterAllTime}
         netBalance={netBalance}
         currency={overallCurrency}
-        onApply={(y, m, all) => { setFilterYear(y); setFilterMonth(m); setFilterAllTime(all); }}
+        onApply={(y, m) => { setFilterYear(y); setFilterMonth(m); }}
         t={t}
       />
 

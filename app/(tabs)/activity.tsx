@@ -8,7 +8,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View, Text, ScrollView, ActivityIndicator,
   RefreshControl, StyleSheet, TouchableOpacity, Alert,
-  Animated, PanResponder,
+  ActionSheetIOS, Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useRouter } from 'expo-router';
@@ -152,22 +152,44 @@ export default function ActivityScreen() {
   useEffect(() => { if (user?.id) fetchActivity(); }, [user?.id]);
   useFocusEffect(useCallback(() => { fetchActivityRef.current(); }, []));
 
-  async function handleDelete(id: string, description: string) {
-    Alert.alert(
-      'Delete Expense',
-      `Delete "${description}"? This cannot be undone.`,
-      [
+  async function handleDelete(id: string) {
+    await supabase.from('expense_splits').delete().eq('expense_id', id);
+    const { error } = await supabase.from('expenses').delete().eq('id', id);
+    if (error) { Alert.alert('Error', 'Could not delete expense.'); return; }
+    setItems(prev => prev.filter(i => i.id !== id));
+  }
+
+  async function handleSettleUp(id: string) {
+    if (!user) return;
+    await supabase.from('expense_splits').update({ paid: true }).eq('expense_id', id).eq('user_id', user.id);
+    fetchActivityRef.current();
+  }
+
+  function showActionSheet(item: ActivityItem) {
+    const options = ['Settle Up', 'Edit', 'Delete', 'Cancel'];
+    if (Platform.OS === 'ios') {
+      ActionSheetIOS.showActionSheetWithOptions(
+        { options, destructiveButtonIndex: 2, cancelButtonIndex: 3, title: item.description },
+        (idx) => {
+          if (idx === 0) handleSettleUp(item.id);
+          if (idx === 1) router.push({ pathname: '/edit-expense', params: { expenseId: item.id } });
+          if (idx === 2) Alert.alert('Delete Expense', `Delete "${item.description}"? This cannot be undone.`, [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Delete', style: 'destructive', onPress: () => handleDelete(item.id) },
+          ]);
+        }
+      );
+    } else {
+      Alert.alert(item.description, undefined, [
+        { text: 'Settle Up', onPress: () => handleSettleUp(item.id) },
+        { text: 'Edit', onPress: () => router.push({ pathname: '/edit-expense', params: { expenseId: item.id } }) },
+        { text: 'Delete', style: 'destructive', onPress: () => Alert.alert('Delete Expense', `Delete "${item.description}"?`, [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Delete', style: 'destructive', onPress: () => handleDelete(item.id) },
+        ])},
         { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete', style: 'destructive', onPress: async () => {
-            await supabase.from('expense_splits').delete().eq('expense_id', id);
-            const { error } = await supabase.from('expenses').delete().eq('id', id);
-            if (error) { Alert.alert('Error', 'Could not delete expense.'); return; }
-            setItems(prev => prev.filter(i => i.id !== id));
-          },
-        },
-      ]
-    );
+      ]);
+    }
   }
 
   return (
@@ -201,18 +223,16 @@ export default function ActivityScreen() {
         ) : (
           items.map((item, i) => {
             const icon = getExpenseIcon(item.description);
-            const d    = new Date(item.date);
-            const dateLabel = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+            const [y, m, d] = item.date.split('-').map(Number);
+            const dateLabel = new Date(y, m - 1, d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 
             return (
-              <SwipeableRow
-                key={item.id}
-                onDelete={() => handleDelete(item.id, item.description)}
-                t={t}
-              >
               <TouchableOpacity
+                key={item.id}
                 style={[s.card, i < items.length - 1 && s.cardBorder]}
                 onPress={() => router.push({ pathname: '/expense-detail', params: { expenseId: item.id } })}
+                onLongPress={() => showActionSheet(item)}
+                delayLongPress={350}
                 activeOpacity={0.7}
               >
                 {/* Category icon */}
@@ -264,61 +284,12 @@ export default function ActivityScreen() {
                   </Text>
                 </View>
               </TouchableOpacity>
-              </SwipeableRow>
             );
           })
         )}
       </ScrollView>
 
     </SafeAreaView>
-  );
-}
-
-// ── Swipeable row ─────────────────────────────────────────────────────────────
-
-const ACT_DELETE_W = 80;
-
-function SwipeableRow({ children, onDelete, t }: { children: any; onDelete: () => void; t: ThemeColors }) {
-  const translateX = useRef(new Animated.Value(0)).current;
-
-  const pan = useRef(
-    PanResponder.create({
-      onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dx) > 8 && Math.abs(g.dy) < 20,
-      onPanResponderMove: (_, g) => {
-        if (g.dx < 0) translateX.setValue(Math.max(g.dx, -ACT_DELETE_W - 10));
-      },
-      onPanResponderRelease: (_, g) => {
-        if (g.dx < -ACT_DELETE_W / 2) {
-          Animated.spring(translateX, { toValue: -ACT_DELETE_W, useNativeDriver: true }).start();
-        } else {
-          Animated.spring(translateX, { toValue: 0, useNativeDriver: true }).start();
-        }
-      },
-    })
-  ).current;
-
-  function snapClose() {
-    Animated.spring(translateX, { toValue: 0, useNativeDriver: true }).start();
-  }
-
-  return (
-    <View style={{ overflow: 'hidden' }}>
-      {/* Red delete button behind */}
-      <View style={{
-        position: 'absolute', right: 0, top: 0, bottom: 0,
-        width: ACT_DELETE_W, backgroundColor: t.danger,
-        alignItems: 'center', justifyContent: 'center', gap: 4,
-      }}>
-        <TouchableOpacity onPress={() => { snapClose(); onDelete(); }} style={{ alignItems: 'center', gap: 4 }} activeOpacity={0.8}>
-          <Ionicons name="trash-outline" size={20} color="#fff" />
-          <Text style={{ color: '#fff', fontSize: 11, fontWeight: '700' }}>Delete</Text>
-        </TouchableOpacity>
-      </View>
-      {/* Sliding row */}
-      <Animated.View style={{ transform: [{ translateX }] }} {...pan.panHandlers}>
-        {children}
-      </Animated.View>
-    </View>
   );
 }
 

@@ -147,8 +147,9 @@ export default function ExpensesScreen() {
   }
 
   async function handleSettleUp(expenseId: string) {
-    await supabase.from('expense_splits').update({ paid: true }).eq('expense_id', expenseId);
-    setRows(prev => prev.filter(r => r.id !== expenseId)); // remove settled from list
+    if (!user) return;
+    await supabase.from('expense_splits').update({ paid: true })
+      .eq('expense_id', expenseId).eq('user_id', user.id);
     await fetchExpenses();
   }
 
@@ -365,7 +366,8 @@ export default function ExpensesScreen() {
               ) : (
                 <View style={s.listCard}>
                   {selRows.map((e, i) => {
-                    const d    = new Date(e.date);
+                    const [ey, em, ed] = e.date.split('-').map(Number);
+                    const d    = new Date(ey, em - 1, ed);
                     const mon  = d.toLocaleDateString('en-US', { month: 'short' });
                     const day  = d.getDate();
                     const icon = getExpenseIcon(e.description);

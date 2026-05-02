@@ -3,12 +3,12 @@
  * Shows full breakdown, spending trends, comments placeholder.
  * Delete and Edit are in the header.
  */
-import { useEffect, useState, useMemo } from 'react';
+import { useCallback, useState, useMemo } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, ActivityIndicator,
   StyleSheet, Alert, TextInput, KeyboardAvoidingView, Platform,
 } from 'react-native';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '@/lib/supabase';
@@ -62,7 +62,7 @@ export default function ExpenseDetailScreen() {
   const [deleting,   setDeleting]   = useState(false);
   const [monthSpends, setMonthSpends] = useState<MonthSpend[]>([]);
 
-  useEffect(() => { fetchDetail(); }, []);
+  useFocusEffect(useCallback(() => { fetchDetail(); }, [expenseId]));
 
   async function fetchDetail() {
     if (!expenseId) return;
@@ -125,8 +125,8 @@ export default function ExpenseDetailScreen() {
 
         const monthTotals: Record<string, number> = {};
         (sharedExp ?? []).forEach((e: any) => {
-          const d   = new Date(e.date);
-          const key = `${d.getFullYear()}-${d.getMonth()}`;
+          const [sy, sm] = (e.date as string).split('-').map(Number);
+          const key = `${sy}-${sm - 1}`;
           monthTotals[key] = (monthTotals[key] ?? 0) + (e.amount ?? 0);
         });
 
@@ -212,7 +212,8 @@ export default function ExpenseDetailScreen() {
 
   const icon          = getExpenseIcon(expense.description);
   const iPaidIt       = expense.paid_by === user?.id;
-  const formattedDate = new Date(expense.date).toLocaleDateString('en-US', {
+  const [dY, dM, dD] = expense.date.split('-').map(Number);
+  const formattedDate = new Date(dY, dM - 1, dD).toLocaleDateString('en-US', {
     day: 'numeric', month: 'long', year: 'numeric',
   });
   const addedBy  = iPaidIt ? 'You' : abbrevName(expense.paidByName);

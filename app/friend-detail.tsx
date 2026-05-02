@@ -258,7 +258,8 @@ export default function FriendDetailScreen() {
     for (const { month, rows } of monthGroups) {
       text += `${month}\n`;
       for (const e of rows) {
-        const d      = new Date(e.date);
+        const [ey, em, ed] = e.date.split('-').map(Number);
+        const d      = new Date(ey, em - 1, ed);
         const label  = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
         const iPaid  = e.paid_by === user?.id;
         const side   = iPaid
@@ -282,7 +283,8 @@ export default function FriendDetailScreen() {
   const monthMap:   Record<string, ExpenseRow[]> = {};
   const monthOrder: string[] = [];
   for (const e of expenses) {
-    const key = new Date(e.date).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+    const [ky, km] = e.date.split('-').map(Number);
+    const key = new Date(ky, km - 1, 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
     if (!monthMap[key]) { monthMap[key] = []; monthOrder.push(key); }
     monthMap[key].push(e);
   }
@@ -385,7 +387,8 @@ export default function FriendDetailScreen() {
             <View key={month}>
               <Text style={s.monthHeader}>{month}</Text>
               {rows.map(e => {
-                const d      = new Date(e.date);
+                const [fy, fm, fd] = e.date.split('-').map(Number);
+                const d      = new Date(fy, fm - 1, fd);
                 const mon    = d.toLocaleDateString('en-US', { month: 'short' });
                 const day    = d.getDate();
                 const icon   = getExpenseIcon(e.description);
