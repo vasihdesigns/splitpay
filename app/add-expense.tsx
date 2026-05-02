@@ -180,12 +180,21 @@ export default function AddExpenseScreen() {
   }
 
   async function buildMembersFromWith() {
-    if (!user) return;
-    const { data: p } = await supabase.from('profiles').select('id, full_name').eq('id', user.id).single();
-    const myName = (p as any)?.full_name ?? 'Me';
+    // Use latest user from store in case it hasn't propagated to this closure yet
+    const currentUser = user ?? useAuthStore.getState().user;
+    const userId = currentUser?.id ?? '';
+    const myName = currentUser?.full_name ?? 'Me';
+
+    // Try to get full name from profile if we have a real user
+    let resolvedName = myName;
+    if (userId) {
+      const { data: p } = await supabase.from('profiles').select('id, full_name').eq('id', userId).single();
+      resolvedName = (p as any)?.full_name ?? myName;
+    }
+
     const me: Member = {
-      user_id: user.id, full_name: myName,
-      initials: getInitials(myName),
+      user_id: userId, full_name: resolvedName,
+      initials: getInitials(resolvedName),
       included: true, owed: '', pct: '', shares: '1', adjustment: '0',
     };
     const others: Member[] = withPeople.map(p => ({
@@ -319,7 +328,20 @@ export default function AddExpenseScreen() {
     if (!description.trim()) { Alert.alert('Missing info', 'Please enter a description.'); return; }
     if (!total || total <= 0) { Alert.alert('Missing info', 'Please enter a valid amount.'); return; }
     if (isSolo) { Alert.alert('Add someone', 'Tap + to add at least one person to split this expense with.'); return; }
-    if (!user) return;
+
+    // Ensure we have a user — try anonymous sign-in if needed
+    let currentUser = user;
+    if (!currentUser) {
+      setLoading(true);
+      const { signInAnonymously } = useAuthStore.getState();
+      await signInAnonymously();
+      currentUser = useAuthStore.getState().user;
+      if (!currentUser) {
+        setLoading(false);
+        Alert.alert('Sign in required', 'Could not create a session. Please restart the app.');
+        return;
+      }
+    }
 
     const payerId = quickSplit !== 'custom' ? quickPayerId() : paidByUserId;
     const splits  = computedSplits();
@@ -343,7 +365,7 @@ export default function AddExpenseScreen() {
       const { error } = await supabase.from('expenses').insert({
         id:          expenseId,
         group_id:    selectedGroup || null,
-        paid_by:     isSolo ? user.id : payerId,
+        paid_by:     isSolo ? currentUser.id : payerId,
         description: description.trim(),
         amount:      total,
         currency,

@@ -12,8 +12,10 @@ export default function Index() {
     if (session) {
       router.replace('/(tabs)/home');
     } else {
-      // Try anonymous sign-in, then go straight to home either way
-      signInAnonymously().finally(() => {
+      // Sign in anonymously so user always has a session before using the app
+      signInAnonymously().then((ok) => {
+        // Whether it succeeded or not, proceed to home
+        // If it failed, user will be prompted when they try to save data
         router.replace('/(tabs)/home');
       });
     }
