@@ -1,5 +1,6 @@
+import { useState } from 'react';
 import { Tabs, useRouter } from 'expo-router';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Modal } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme, ThemeColors } from '@/lib/theme';
 
@@ -18,13 +19,12 @@ function TabIcon({ name, activeName, label, focused }: {
   );
 }
 
-function AddExpenseFAB() {
-  const router = useRouter();
+function AddExpenseFAB({ onPress }: { onPress: () => void }) {
   const t = useTheme();
   return (
     <TouchableOpacity
       style={[styles.fab, { backgroundColor: t.primary, shadowColor: t.primary }]}
-      onPress={() => router.push('/add-expense')}
+      onPress={onPress}
       activeOpacity={0.85}
     >
       <Ionicons name="add-circle-outline" size={22} color="#fff" />
@@ -33,8 +33,43 @@ function AddExpenseFAB() {
   );
 }
 
+const CONTEXT_OPTIONS = [
+  {
+    key:      'people',
+    icon:     'person-add-outline' as IoniconsName,
+    label:    'With a friend',
+    sub:      'Split a bill one-on-one',
+    iconBg:   '#ede9fe',
+    iconColor:'#7c3aed',
+  },
+  {
+    key:      'group',
+    icon:     'people-outline' as IoniconsName,
+    label:    'In a group',
+    sub:      'Add to a group expense',
+    iconBg:   '#dbeafe',
+    iconColor:'#2563eb',
+  },
+  {
+    key:      'solo',
+    icon:     'create-outline' as IoniconsName,
+    label:    'Personal expense',
+    sub:      'Track something paid just by you',
+    iconBg:   '#dcfce7',
+    iconColor:'#16a34a',
+  },
+];
+
 export default function TabsLayout() {
   const t = useTheme();
+  const router = useRouter();
+  const [showSheet, setShowSheet] = useState(false);
+
+  function handleOption(key: string) {
+    setShowSheet(false);
+    router.push({ pathname: '/add-expense', params: { autoOpen: key } });
+  }
+
   return (
     <View style={{ flex: 1 }}>
       <Tabs screenOptions={{
@@ -51,8 +86,58 @@ export default function TabsLayout() {
         <Tabs.Screen name="expenses" options={{ href: null }} />
       </Tabs>
 
-      {/* Floating Add Expense button — sits above all tabs */}
-      <AddExpenseFAB />
+      {/* Floating Add Expense button */}
+      <AddExpenseFAB onPress={() => setShowSheet(true)} />
+
+      {/* Context bottom sheet */}
+      <Modal
+        visible={showSheet}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowSheet(false)}
+      >
+        <TouchableOpacity
+          style={styles.overlay}
+          activeOpacity={1}
+          onPress={() => setShowSheet(false)}
+        >
+          <View style={[styles.sheet, { backgroundColor: t.card }]}>
+            {/* Handle */}
+            <View style={[styles.handle, { backgroundColor: t.border }]} />
+
+            <Text style={[styles.sheetTitle, { color: t.text }]}>Add an expense</Text>
+
+            {CONTEXT_OPTIONS.map((opt, i) => (
+              <TouchableOpacity
+                key={opt.key}
+                style={[
+                  styles.optionRow,
+                  i < CONTEXT_OPTIONS.length - 1 && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: t.border },
+                ]}
+                onPress={() => handleOption(opt.key)}
+                activeOpacity={0.72}
+              >
+                <View style={[styles.optionIconBox, { backgroundColor: opt.iconBg }]}>
+                  <Ionicons name={opt.icon} size={22} color={opt.iconColor} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.optionLabel, { color: t.text }]}>{opt.label}</Text>
+                  <Text style={[styles.optionSub, { color: t.subtext }]}>{opt.sub}</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={16} color={t.placeholder} />
+              </TouchableOpacity>
+            ))}
+
+            <TouchableOpacity
+              style={[styles.cancelBtn, { backgroundColor: t.inputBg }]}
+              onPress={() => setShowSheet(false)}
+              activeOpacity={0.75}
+            >
+              <Text style={[styles.cancelText, { color: t.text }]}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </View>
   );
 }
@@ -74,6 +159,54 @@ const styles = StyleSheet.create({
     elevation: 8,
   },
   fabText: { color: '#fff', fontWeight: 'bold', fontSize: 15 },
+
+  overlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    justifyContent: 'flex-end',
+  },
+  sheet: {
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingTop: 12,
+    paddingHorizontal: 16,
+    paddingBottom: 36,
+  },
+  handle: {
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    alignSelf: 'center',
+    marginBottom: 16,
+  },
+  sheetTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    textAlign: 'center',
+    marginBottom: 20,
+  },
+  optionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 16,
+    gap: 14,
+  },
+  optionIconBox: {
+    width: 46,
+    height: 46,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  optionLabel: { fontSize: 16, fontWeight: '600', marginBottom: 2 },
+  optionSub:   { fontSize: 13 },
+  cancelBtn: {
+    marginTop: 16,
+    borderRadius: 14,
+    paddingVertical: 16,
+    alignItems: 'center',
+  },
+  cancelText: { fontSize: 16, fontWeight: '600' },
 });
 
 function makeStyles(t: ThemeColors) {

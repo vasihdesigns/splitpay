@@ -92,7 +92,7 @@ function computeSplitsFor(
 
 export default function AddExpenseScreen() {
   const router = useRouter();
-  const { groupId, groupName } = useLocalSearchParams<{ groupId?: string; groupName?: string }>();
+  const { groupId, groupName, autoOpen } = useLocalSearchParams<{ groupId?: string; groupName?: string; autoOpen?: string }>();
   const { user } = useAuthStore();
   const t = useTheme();
   const s = useMemo(() => makeStyles(t), [t]);
@@ -137,6 +137,16 @@ export default function AddExpenseScreen() {
       fetchUserGroups();
     }
   }, [user]);
+
+  // Auto-open the right picker based on how the screen was launched
+  useEffect(() => {
+    if (!autoOpen) return;
+    const timer = setTimeout(() => {
+      if (autoOpen === 'people') setShowPeopleModal(true);
+      if (autoOpen === 'group')  setShowGroupModal(true);
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [autoOpen]);
 
   async function fetchUserGroups() {
     if (!user) return;
@@ -316,7 +326,7 @@ export default function AddExpenseScreen() {
   async function handleSubmit() {
     if (!description.trim()) { Alert.alert('Missing info', 'Please enter a description.'); return; }
     if (!total || total <= 0) { Alert.alert('Missing info', 'Please enter a valid amount.'); return; }
-    if (isSolo) { Alert.alert('Add someone', 'Tap + to add at least one person to split this expense with.'); return; }
+    if (isSolo && autoOpen !== 'solo') { Alert.alert('Add someone', 'Tap + to add at least one person to split this expense with.'); return; }
 
     // Ensure we have a user — try anonymous sign-in if needed
     let currentUser = user;
@@ -396,7 +406,7 @@ export default function AddExpenseScreen() {
         <TouchableOpacity onPress={() => router.back()} style={s.headerBtn}>
           <Ionicons name="close" size={24} color={t.subtext} />
         </TouchableOpacity>
-        <Text style={s.headerTitle}>Add an expense</Text>
+        <Text style={s.headerTitle}>{autoOpen === 'solo' ? 'Personal expense' : 'Add an expense'}</Text>
         <TouchableOpacity style={s.headerBtn} onPress={handleSubmit} disabled={loading}>
           {loading
             ? <ActivityIndicator color={t.success} size="small" />
@@ -404,8 +414,8 @@ export default function AddExpenseScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* ── "With you and:" chip row — outside KAV ── */}
-      <View style={s.withBar}>
+      {/* ── "With you and:" chip row — hidden for personal expense ── */}
+      {autoOpen !== 'solo' && <View style={s.withBar}>
         <Text style={s.withBarLabel}>
           With <Text style={s.withBarBold}>you</Text> and:
         </Text>
@@ -436,7 +446,7 @@ export default function AddExpenseScreen() {
             </>
           )}
         </ScrollView>
-      </View>
+      </View>}
 
       <ScrollView
         style={{ flex: 1 }}
@@ -483,37 +493,39 @@ export default function AddExpenseScreen() {
 
           </View>
 
-          {/* ── Split pill ── */}
-          <View style={s.splitSection}>
-            <Text style={[s.splitSectionLabel, isSolo && { color: '#f97316' }]}>Split</Text>
-            <TouchableOpacity
-              style={[s.splitBtn, isSolo && { borderColor: '#fed7aa', backgroundColor: '#fff7ed' }]}
-              onPress={() => isSolo ? setShowPeopleModal(true) : setShowQuickModal(true)}
-              activeOpacity={0.75}
-            >
-              <View style={s.splitBtnLeft}>
-                <View style={[s.splitBtnDot, {
-                  backgroundColor: isSolo ? '#f97316' : isGreen ? '#16a34a' : '#f97316',
-                }]} />
-                <View>
-                  <Text style={[s.splitBtnText, isSolo && { color: '#ea580c' }]}>{splitRowLabel()}</Text>
-                  {splitRowSub() ? (
-                    <Text style={[s.splitBtnSub, { color: isSolo ? '#f97316' : isGreen ? '#16a34a' : '#ef4444' }]}>
-                      {splitRowSub()}
-                    </Text>
-                  ) : null}
+          {/* ── Split pill — hidden for personal expense ── */}
+          {autoOpen !== 'solo' && (
+            <View style={s.splitSection}>
+              <Text style={[s.splitSectionLabel, isSolo && { color: '#f97316' }]}>Split</Text>
+              <TouchableOpacity
+                style={[s.splitBtn, isSolo && { borderColor: '#fed7aa', backgroundColor: '#fff7ed' }]}
+                onPress={() => isSolo ? setShowPeopleModal(true) : setShowQuickModal(true)}
+                activeOpacity={0.75}
+              >
+                <View style={s.splitBtnLeft}>
+                  <View style={[s.splitBtnDot, {
+                    backgroundColor: isSolo ? '#f97316' : isGreen ? '#16a34a' : '#f97316',
+                  }]} />
+                  <View>
+                    <Text style={[s.splitBtnText, isSolo && { color: '#ea580c' }]}>{splitRowLabel()}</Text>
+                    {splitRowSub() ? (
+                      <Text style={[s.splitBtnSub, { color: isSolo ? '#f97316' : isGreen ? '#16a34a' : '#ef4444' }]}>
+                        {splitRowSub()}
+                      </Text>
+                    ) : null}
+                  </View>
                 </View>
-              </View>
-              <View style={s.splitBtnRight}>
-                {isSolo
-                  ? <Ionicons name="add-circle" size={22} color="#f97316" />
-                  : <><Text style={s.splitBtnEdit}>Edit</Text><Ionicons name="chevron-forward" size={16} color="#9ca3af" /></>
-                }
-              </View>
-            </TouchableOpacity>
-          </View>
+                <View style={s.splitBtnRight}>
+                  {isSolo
+                    ? <Ionicons name="add-circle" size={22} color="#f97316" />
+                    : <><Text style={s.splitBtnEdit}>Edit</Text><Ionicons name="chevron-forward" size={16} color="#9ca3af" /></>
+                  }
+                </View>
+              </TouchableOpacity>
+            </View>
+          )}
 
-          {/* ── 4 action boxes ── */}
+          {/* ── Action boxes ── */}
           <View style={s.actionGrid}>
             {/* Date */}
             <TouchableOpacity style={s.actionCard} onPress={() => setShowDatePicker(true)} activeOpacity={0.75}>
@@ -528,16 +540,18 @@ export default function AddExpenseScreen() {
               </Text>
             </TouchableOpacity>
 
-            {/* Group */}
-            <TouchableOpacity style={[s.actionCard, !!selectedGroup && s.actionCardActive]} onPress={() => setShowGroupModal(true)} activeOpacity={0.75}>
-              <View style={[s.actionIconCircle, !!selectedGroup && { backgroundColor: t.primaryBg }]}>
-                <Ionicons name="people" size={22} color={t.primary} />
-              </View>
-              <Text style={[s.actionLabel, !!selectedGroup && { color: t.primary }]}>Group</Text>
-              <Text style={[s.actionValue, !!selectedGroup && { color: t.primary, fontWeight: '600' }]} numberOfLines={1}>
-                {selectedGroup ? (userGroups.find(g => g.id === selectedGroup)?.name ?? 'Group') : 'None'}
-              </Text>
-            </TouchableOpacity>
+            {/* Group — hidden for personal expense */}
+            {autoOpen !== 'solo' && (
+              <TouchableOpacity style={[s.actionCard, !!selectedGroup && s.actionCardActive]} onPress={() => setShowGroupModal(true)} activeOpacity={0.75}>
+                <View style={[s.actionIconCircle, !!selectedGroup && { backgroundColor: t.primaryBg }]}>
+                  <Ionicons name="people" size={22} color={t.primary} />
+                </View>
+                <Text style={[s.actionLabel, !!selectedGroup && { color: t.primary }]}>Group</Text>
+                <Text style={[s.actionValue, !!selectedGroup && { color: t.primary, fontWeight: '600' }]} numberOfLines={1}>
+                  {selectedGroup ? (userGroups.find(g => g.id === selectedGroup)?.name ?? 'Group') : 'None'}
+                </Text>
+              </TouchableOpacity>
+            )}
 
             {/* Scan Bill */}
             <TouchableOpacity style={s.actionCard} onPress={() => setShowScanModal(true)} activeOpacity={0.75}>

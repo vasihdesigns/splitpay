@@ -83,11 +83,13 @@ export default function ExpensesScreen() {
       setRows([]); setLoading(false); setRefreshing(false); return;
     }
 
-    // 2. Expense records with group name
+    // 2. Expense records — personal only (no group, paid by me)
     const { data: expenses } = await supabase
       .from('expenses')
       .select('id, description, amount, currency, date, paid_by, group:groups(name)')
       .in('id', expIds)
+      .eq('paid_by', user.id)
+      .is('group_id', null)
       .order('date', { ascending: false });
 
     if (!expenses?.length) { setRows([]); setLoading(false); setRefreshing(false); return; }
@@ -118,8 +120,8 @@ export default function ExpensesScreen() {
     const myShareMap: Record<string, number> = {};
     (mySplits ?? []).forEach((s: any) => { myShareMap[s.expense_id] = s.amount; });
 
-    // 6. Assemble
-    const result: ExpenseRow[] = expenses.map((e: any) => ({
+    // 6. Assemble — keep only solo expenses (splitCount === 1)
+    const result: ExpenseRow[] = expenses.filter((e: any) => splitCountMap[e.id] === 1).map((e: any) => ({
       id:          e.id,
       description: e.description,
       amount:      e.amount,
@@ -229,7 +231,10 @@ export default function ExpensesScreen() {
       >
         {/* Page title */}
         <View style={s.topBar}>
-          <Text style={s.pageTitle}>Expenses</Text>
+          <Text style={s.pageTitle}>Personal Expenses</Text>
+          <Text style={{ color: '#9ca3af', fontSize: 13, marginTop: 2 }}>
+            Only expenses paid by you, not split with anyone
+          </Text>
         </View>
 
         {loading ? (
@@ -237,8 +242,8 @@ export default function ExpensesScreen() {
         ) : rows.length === 0 ? (
           <View style={s.empty}>
             <Ionicons name="receipt-outline" size={56} color="#d1d5db" style={{ marginBottom: 12 }} />
-            <Text style={s.emptyTitle}>No shared expenses yet</Text>
-            <Text style={s.emptySub}>Add an expense and split it with friends</Text>
+            <Text style={s.emptyTitle}>No personal expenses yet</Text>
+            <Text style={s.emptySub}>Tap "Add expense" → Personal expense to track your own spending</Text>
           </View>
         ) : (
           <>
@@ -271,7 +276,7 @@ export default function ExpensesScreen() {
               <View style={s.heroTop}>
                 <View>
                   <Text style={s.heroLabel}>
-                    My share ·{' '}
+                    Personal spending ·{' '}
                     {new Date(
                       Number(selMonth.split('-')[0]),
                       Number(selMonth.split('-')[1]) - 1, 1,
