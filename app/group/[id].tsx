@@ -84,7 +84,7 @@ export default function GroupDetailScreen() {
 
   async function handleSettleExpense(expenseId: string) {
     await supabase.from('expense_splits').update({ paid: true }).eq('expense_id', expenseId);
-    fetchGroup();
+    await fetchGroup();
   }
 
   function showExpenseActions(expense: any) {
@@ -115,14 +115,13 @@ export default function GroupDetailScreen() {
   }
 
   async function handleDeleteExpense(expenseId: string) {
-    // Delete splits first, then the expense
     await supabase.from('expense_splits').delete().eq('expense_id', expenseId);
     const { error } = await supabase.from('expenses').delete().eq('id', expenseId);
     if (error) {
       Alert.alert('Error', 'Could not delete expense. Please try again.');
       return;
     }
-    setExpenses(prev => prev.filter(e => e.id !== expenseId));
+    await fetchGroup();
   }
 
   async function handleInvite() {

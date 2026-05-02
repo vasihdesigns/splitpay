@@ -143,7 +143,7 @@ export default function ExpensesScreen() {
   async function handleDelete(expenseId: string) {
     await supabase.from('expense_splits').delete().eq('expense_id', expenseId);
     await supabase.from('expenses').delete().eq('id', expenseId);
-    setRows(prev => prev.filter(r => r.id !== expenseId));
+    await fetchExpenses();
   }
 
   async function handleSettleUp(expenseId: string) {

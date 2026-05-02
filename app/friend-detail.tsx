@@ -2,12 +2,12 @@
  * Friend Detail — hero header, action pills, month-grouped expense list
  * Actions: Remind · Charts · Convert to USD · Export
  */
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, ActivityIndicator,
   StyleSheet, RefreshControl, Alert, Share, Modal, ActionSheetIOS, Platform,
 } from 'react-native';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '@/lib/supabase';
@@ -62,7 +62,7 @@ export default function FriendDetailScreen() {
   // Charts modal
   const [showCharts, setShowCharts] = useState(false);
 
-  useEffect(() => { fetchExpenses(); }, []);
+  useFocusEffect(useCallback(() => { fetchExpenses(); }, [userId]));
 
   async function fetchExpenses() {
     if (!user || !userId) { setLoading(false); return; }
@@ -186,12 +186,12 @@ export default function FriendDetailScreen() {
   async function handleDelete(expenseId: string) {
     await supabase.from('expense_splits').delete().eq('expense_id', expenseId);
     await supabase.from('expenses').delete().eq('id', expenseId);
-    fetchExpenses();
+    await fetchExpenses();
   }
 
   async function handleSettleUp(expenseId: string) {
     await supabase.from('expense_splits').update({ paid: true }).eq('expense_id', expenseId);
-    fetchExpenses();
+    await fetchExpenses();
   }
 
   function showActionSheet(e: ExpenseRow) {
