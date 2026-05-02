@@ -222,7 +222,10 @@ export default function AddExpenseScreen() {
       : (otherMember?.user_id ?? '');
   }
 
-  const isSolo = members.length <= 1; // no one else added
+  // isSolo is true when no one has been added to split with.
+  // Use withPeople (sync) rather than members (async) so the split row
+  // updates immediately when someone is selected in the people picker.
+  const isSolo = groupId ? members.length <= 1 : withPeople.length === 0;
 
   function computedSplits(): { user_id: string; amount: number }[] {
     if (!total || !members.length) return [];
