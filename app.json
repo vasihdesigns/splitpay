@@ -15,7 +15,15 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.splitpay.app"
+      "bundleIdentifier": "com.splitpay.app",
+      "infoPlist": {
+        "NSContactsUsageDescription": "SplitPay uses your contacts to find friends already on the app and to invite others.",
+        "NSCameraUsageDescription": "SplitPay uses the camera to scan receipts and bills.",
+        "NSPhotoLibraryUsageDescription": "SplitPay accesses your photo library to import receipt images.",
+        "LSApplicationQueriesSchemes": [
+          "whatsapp"
+        ]
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -30,7 +38,29 @@
       "bundler": "metro"
     },
     "plugins": [
-      "expo-router"
+      "expo-router",
+      "expo-web-browser",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "SplitPay accesses your photos to import receipt images.",
+          "cameraPermission": "SplitPay uses the camera to scan receipts and bills."
+        }
+      ],
+      [
+        "expo-contacts",
+        {
+          "contactsPermission": "SplitPay uses your contacts to find friends already on the app and to invite others."
+        }
+      ],
+      [
+        "react-native-google-mobile-ads",
+        {
+          "androidAppId": "ca-app-pub-3940256099942544~3347511713",
+          "iosAppId": "ca-app-pub-3940256099942544~1458002511"
+        }
+      ],
+      "@react-native-community/datetimepicker"
     ],
     "experiments": {
       "typedRoutes": true

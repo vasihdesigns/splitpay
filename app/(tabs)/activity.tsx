@@ -1,87 +1,362 @@
-import { useEffect, useState } from 'react';
-import { View, Text, ScrollView, ActivityIndicator, RefreshControl, StyleSheet } from 'react-native';
+/**
+ * Activity tab — recent shared expense feed
+ *
+ * Derived directly from `expenses` + `expense_splits` tables.
+ * No separate `activities` table needed.
+ */
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  View, Text, ScrollView, ActivityIndicator,
+  RefreshControl, StyleSheet, TouchableOpacity, Alert,
+  Animated, PanResponder,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useFocusEffect, useRouter } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
-import { formatDate, formatCurrency } from '@/lib/utils';
+import { formatCurrency, getExpenseIcon, formatRelativeTime } from '@/lib/utils';
+import { useTheme, ThemeColors } from '@/lib/theme';
 
-interface ActivityItem { id: string; type: string; description: string; amount?: number; actor_name: string; created_at: string; }
-const ICONS: Record<string, string> = { expense_added: '💸', expense_edited: '✏️', expense_deleted: '🗑️', settlement: '✅', member_added: '👋' };
+interface ActivityItem {
+  id:          string;
+  description: string;
+  amount:      number;
+  currency:    string;
+  date:        string;
+  payerName:   string;
+  groupName:   string | null;
+  iDidPay:     boolean;
+  youGetBack?: number;
+  youOwe?:     number;
+  splitCount:  number;
+}
 
 export default function ActivityScreen() {
   const { user } = useAuthStore();
-  const [activities, setActivities] = useState<ActivityItem[]>([]);
-  const [loading, setLoading]       = useState(true);
+  const router   = useRouter();
+  const t        = useTheme();
+  const s        = useMemo(() => makeStyles(t), [t]);
+
+  const [items,      setItems]      = useState<ActivityItem[]>([]);
+  const [loading,    setLoading]    = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
+  const fetchActivityRef = useRef<() => Promise<void>>(async () => {});
+
   async function fetchActivity() {
-    if (!user) return;
-    const { data, error } = await supabase
-      .from('activities')
-      .select('*, actor:profiles(full_name), expense:expenses(description, amount)')
-      .or(`actor_id.eq.${user.id}`)
-      .order('created_at', { ascending: false })
-      .limit(50);
-    if (!error && data) {
-      setActivities(data.map((a: any) => ({
-        id: a.id, type: a.type,
-        description: a.expense?.description ?? 'Activity',
-        amount: a.expense?.amount,
-        actor_name: a.actor?.full_name ?? 'Someone',
-        created_at: a.created_at,
-      })));
+    if (!user) { setLoading(false); setRefreshing(false); return; }
+
+    // 1. All expense_splits for this user
+    const { data: mySplits } = await supabase
+      .from('expense_splits')
+      .select('expense_id, amount, paid')
+      .eq('user_id', user.id);
+
+    const expIds = (mySplits ?? []).map((s: any) => s.expense_id);
+
+    if (!expIds.length) {
+      setItems([]); setLoading(false); setRefreshing(false); return;
     }
-    setLoading(false); setRefreshing(false);
+
+    // 2. Expense records, newest first (no FK join — fetch groups separately)
+    const { data: expenses } = await supabase
+      .from('expenses')
+      .select('id, description, amount, currency, date, paid_by, group_id')
+      .in('id', expIds)
+      .order('date', { ascending: false })
+      .limit(80);
+
+    if (!expenses?.length) {
+      setItems([]); setLoading(false); setRefreshing(false); return;
+    }
+
+    // 2b. Group names (fetched separately to avoid FK join issues)
+    const groupIds = [...new Set(expenses.map((e: any) => e.group_id).filter(Boolean))];
+    const groupNameMap: Record<string, string> = {};
+    if (groupIds.length) {
+      const { data: groups } = await supabase
+        .from('groups').select('id, name').in('id', groupIds);
+      groups?.forEach((g: any) => { groupNameMap[g.id] = g.name; });
+    }
+
+    // 3. All splits for these expenses (to compute "you get back" amounts)
+    const { data: allSplits } = await supabase
+      .from('expense_splits')
+      .select('expense_id, user_id, amount, paid')
+      .in('expense_id', expIds);
+
+    // 4. Payer profile names
+    const payerIds = [...new Set(expenses.map((e: any) => e.paid_by).filter(Boolean))];
+    const nameMap: Record<string, string> = {};
+    if (payerIds.length) {
+      const { data: profiles } = await supabase
+        .from('profiles')
+        .select('id, full_name')
+        .in('id', payerIds);
+      profiles?.forEach((p: any) => { nameMap[p.id] = p.full_name ?? 'Someone'; });
+    }
+
+    // 5. Index my splits and all splits by expense_id
+    const myShareMap: Record<string, { amount: number; paid: boolean }> = {};
+    (mySplits ?? []).forEach((s: any) => {
+      myShareMap[s.expense_id] = { amount: Number(s.amount), paid: s.paid };
+    });
+
+    const splitsByExpense: Record<string, any[]> = {};
+    (allSplits ?? []).forEach((s: any) => {
+      if (!splitsByExpense[s.expense_id]) splitsByExpense[s.expense_id] = [];
+      splitsByExpense[s.expense_id].push(s);
+    });
+
+    // 6. Build items
+    const result: ActivityItem[] = expenses.map((e: any) => {
+      const iDidPay = e.paid_by === user.id;
+      const myShare = myShareMap[e.id];
+      const splits  = splitsByExpense[e.id] ?? [];
+
+      let youGetBack: number | undefined;
+      let youOwe: number | undefined;
+
+      if (iDidPay) {
+        // Sum of other people's unpaid splits — Number() prevents string concatenation
+        const unpaidTotal = splits
+          .filter((s: any) => s.user_id !== user.id && !s.paid)
+          .reduce((sum: number, s: any) => sum + Number(s.amount), 0);
+        if (unpaidTotal > 0.01) youGetBack = unpaidTotal;
+      } else if (myShare && !myShare.paid && Number(myShare.amount) > 0.01) {
+        youOwe = Number(myShare.amount);
+      }
+
+      return {
+        id:          e.id,
+        description: e.description,
+        amount:      Number(e.amount),
+        currency:    e.currency ?? 'USD',
+        date:        e.date,
+        payerName:   iDidPay ? 'You' : (nameMap[e.paid_by] ?? 'Someone'),
+        groupName:   groupNameMap[e.group_id] ?? null,
+        iDidPay,
+        youGetBack,
+        youOwe,
+        splitCount:  splits.length,
+      };
+    });
+
+    setItems(result);
+    setLoading(false);
+    setRefreshing(false);
   }
 
-  useEffect(() => { fetchActivity(); }, [user]);
+  fetchActivityRef.current = fetchActivity;
+  useEffect(() => { if (user?.id) fetchActivity(); }, [user?.id]);
+  useFocusEffect(useCallback(() => { fetchActivityRef.current(); }, []));
+
+  async function handleDelete(id: string, description: string) {
+    Alert.alert(
+      'Delete Expense',
+      `Delete "${description}"? This cannot be undone.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete', style: 'destructive', onPress: async () => {
+            await supabase.from('expense_splits').delete().eq('expense_id', id);
+            const { error } = await supabase.from('expenses').delete().eq('id', id);
+            if (error) { Alert.alert('Error', 'Could not delete expense.'); return; }
+            setItems(prev => prev.filter(i => i.id !== id));
+          },
+        },
+      ]
+    );
+  }
 
   return (
-    <SafeAreaView style={s.screen}>
-      <View style={s.topBar}><Text style={s.pageTitle}>Activity</Text></View>
+    <SafeAreaView style={[s.screen, { backgroundColor: t.bg }]}>
+      <View style={s.topBar}>
+        <TouchableOpacity onPress={() => router.back()} style={s.backBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+          <Ionicons name="chevron-back" size={24} color={t.text} />
+        </TouchableOpacity>
+        <Text style={s.pageTitle}>Activity</Text>
+      </View>
+
       <ScrollView
-        style={{ flex: 1 }}
-        contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 32 }}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetchActivity(); }} tintColor="#4f46e5" />}
+        contentContainerStyle={{ paddingBottom: 100 }}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => { setRefreshing(true); fetchActivity(); }}
+            tintColor={t.primary}
+          />
+        }
       >
-        {loading ? <ActivityIndicator color="#4f46e5" style={{ marginTop: 40 }} /> :
-         activities.length === 0 ? (
+        {loading ? (
+          <ActivityIndicator color={t.primary} style={{ marginTop: 40 }} />
+        ) : items.length === 0 ? (
           <View style={s.empty}>
-            <Text style={{ fontSize: 48, marginBottom: 16 }}>🔔</Text>
+            <Ionicons name="time-outline" size={52} color={t.muted} style={{ marginBottom: 14 }} />
             <Text style={s.emptyTitle}>No activity yet</Text>
-            <Text style={s.emptySub}>Expense activity will appear here</Text>
+            <Text style={s.emptySub}>Add a shared expense to see it here</Text>
           </View>
-        ) : activities.map((item) => (
-          <View key={item.id} style={s.card}>
-            <View style={s.iconBox}><Text>{ICONS[item.type] ?? '📌'}</Text></View>
-            <View style={{ flex: 1 }}>
-              <Text style={s.actorText}>
-                <Text style={s.actorName}>{item.actor_name} </Text>
-                <Text style={s.actorAction}>{item.type === 'expense_added' ? 'added' : item.type.replace('_', ' ')} </Text>
-                {item.description}
-              </Text>
-              {item.amount !== undefined && <Text style={s.amount}>{formatCurrency(item.amount)}</Text>}
-              <Text style={s.date}>{formatDate(item.created_at)}</Text>
-            </View>
-          </View>
-        ))}
+        ) : (
+          items.map((item, i) => {
+            const icon = getExpenseIcon(item.description);
+            const d    = new Date(item.date);
+            const dateLabel = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+
+            return (
+              <SwipeableRow
+                key={item.id}
+                onDelete={() => handleDelete(item.id, item.description)}
+                t={t}
+              >
+              <TouchableOpacity
+                style={[s.card, i < items.length - 1 && s.cardBorder]}
+                onPress={() => router.push({ pathname: '/expense-detail', params: { expenseId: item.id } })}
+                activeOpacity={0.7}
+              >
+                {/* Category icon */}
+                <View style={[s.iconBox, { backgroundColor: icon.bg }]}>
+                  <Ionicons name={icon.name as any} size={20} color={icon.color} />
+                </View>
+
+                {/* Body */}
+                <View style={s.body}>
+                  {/* Top row: who + action */}
+                  <Text style={s.actorLine} numberOfLines={1}>
+                    <Text style={s.actorBold}>{item.payerName}</Text>
+                    <Text style={s.actorGrey}> added </Text>
+                    <Text style={s.actorBold}>"{item.description}"</Text>
+                  </Text>
+
+                  {/* Owe / get-back line */}
+                  {item.youGetBack != null && (
+                    <Text style={s.getBack}>
+                      You get back {formatCurrency(item.youGetBack, item.currency)}
+                    </Text>
+                  )}
+                  {item.youOwe != null && (
+                    <Text style={s.youOwe}>
+                      You owe {formatCurrency(item.youOwe, item.currency)}
+                    </Text>
+                  )}
+                  {item.youGetBack == null && item.youOwe == null && (
+                    <Text style={s.settled}>All settled</Text>
+                  )}
+
+                  {/* Meta */}
+                  <View style={s.metaRow}>
+                    {item.groupName && (
+                      <View style={s.groupTag}>
+                        <Ionicons name="people" size={11} color={t.primary} style={{ marginRight: 3 }} />
+                        <Text style={s.groupTagText}>{item.groupName}</Text>
+                      </View>
+                    )}
+                    <Text style={s.dateText}>{dateLabel}</Text>
+                  </View>
+                </View>
+
+                {/* Right: total amount */}
+                <View style={s.rightCol}>
+                  <Text style={s.totalAmt}>{formatCurrency(item.amount, item.currency)}</Text>
+                  <Text style={s.splitMeta}>
+                    {item.splitCount > 1 ? `${item.splitCount} people` : 'only you'}
+                  </Text>
+                </View>
+              </TouchableOpacity>
+              </SwipeableRow>
+            );
+          })
+        )}
       </ScrollView>
+
     </SafeAreaView>
   );
 }
 
-const s = StyleSheet.create({
-  screen:     { flex: 1, backgroundColor: '#f8fafc' },
-  topBar:     { paddingHorizontal: 24, paddingTop: 16, paddingBottom: 16 },
-  pageTitle:  { color: '#111827', fontSize: 24, fontWeight: 'bold' },
-  card:       { backgroundColor: '#ffffff', borderRadius: 12, padding: 16, marginBottom: 8, flexDirection: 'row', alignItems: 'center', gap: 12, borderWidth: 1, borderColor: '#f1f5f9' },
-  iconBox:    { width: 40, height: 40, borderRadius: 20, backgroundColor: '#eef2ff', alignItems: 'center', justifyContent: 'center' },
-  actorText:  { color: '#111827', fontSize: 14 },
-  actorName:  { fontWeight: '600' },
-  actorAction:{ color: '#6b7280' },
-  amount:     { color: '#6b7280', fontSize: 13, marginTop: 2 },
-  date:       { color: '#9ca3af', fontSize: 12, marginTop: 2 },
-  empty:      { alignItems: 'center', marginTop: 80 },
-  emptyTitle: { color: '#111827', fontWeight: 'bold', fontSize: 18 },
-  emptySub:   { color: '#6b7280', fontSize: 14, marginTop: 8, textAlign: 'center' },
-});
+// ── Swipeable row ─────────────────────────────────────────────────────────────
+
+const ACT_DELETE_W = 80;
+
+function SwipeableRow({ children, onDelete, t }: { children: any; onDelete: () => void; t: ThemeColors }) {
+  const translateX = useRef(new Animated.Value(0)).current;
+
+  const pan = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dx) > 8 && Math.abs(g.dy) < 20,
+      onPanResponderMove: (_, g) => {
+        if (g.dx < 0) translateX.setValue(Math.max(g.dx, -ACT_DELETE_W - 10));
+      },
+      onPanResponderRelease: (_, g) => {
+        if (g.dx < -ACT_DELETE_W / 2) {
+          Animated.spring(translateX, { toValue: -ACT_DELETE_W, useNativeDriver: true }).start();
+        } else {
+          Animated.spring(translateX, { toValue: 0, useNativeDriver: true }).start();
+        }
+      },
+    })
+  ).current;
+
+  function snapClose() {
+    Animated.spring(translateX, { toValue: 0, useNativeDriver: true }).start();
+  }
+
+  return (
+    <View style={{ overflow: 'hidden' }}>
+      {/* Red delete button behind */}
+      <View style={{
+        position: 'absolute', right: 0, top: 0, bottom: 0,
+        width: ACT_DELETE_W, backgroundColor: t.danger,
+        alignItems: 'center', justifyContent: 'center', gap: 4,
+      }}>
+        <TouchableOpacity onPress={() => { snapClose(); onDelete(); }} style={{ alignItems: 'center', gap: 4 }} activeOpacity={0.8}>
+          <Ionicons name="trash-outline" size={20} color="#fff" />
+          <Text style={{ color: '#fff', fontSize: 11, fontWeight: '700' }}>Delete</Text>
+        </TouchableOpacity>
+      </View>
+      {/* Sliding row */}
+      <Animated.View style={{ transform: [{ translateX }] }} {...pan.panHandlers}>
+        {children}
+      </Animated.View>
+    </View>
+  );
+}
+
+function makeStyles(t: ThemeColors) {
+  return StyleSheet.create({
+    screen:    { flex: 1, backgroundColor: t.bg },
+    topBar:    { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingTop: 16, paddingBottom: 12, gap: 4 },
+    backBtn:   { padding: 4 },
+    pageTitle: { color: t.text, fontSize: 26, fontWeight: '800', flex: 1 },
+
+    card:       { flexDirection: 'row', alignItems: 'flex-start', paddingHorizontal: 20,
+                  paddingVertical: 16, backgroundColor: t.card, gap: 12 },
+    cardBorder: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: t.border },
+
+    iconBox: { width: 44, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginTop: 2 },
+
+    body:       { flex: 1 },
+    actorLine:  { fontSize: 14, color: t.text, lineHeight: 20, marginBottom: 2 },
+    actorBold:  { fontWeight: '600', color: t.text },
+    actorGrey:  { color: t.subtext, fontWeight: '400' },
+
+    getBack:  { color: t.success, fontWeight: '600', fontSize: 13, marginBottom: 4 },
+    youOwe:   { color: t.danger, fontWeight: '600', fontSize: 13, marginBottom: 4 },
+    settled:  { color: t.placeholder, fontSize: 12, marginBottom: 4 },
+
+    metaRow:      { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 2 },
+    groupTag:     { flexDirection: 'row', alignItems: 'center', backgroundColor: t.primaryBg,
+                    borderRadius: 6, paddingHorizontal: 7, paddingVertical: 2 },
+    groupTagText: { color: t.primary, fontSize: 11, fontWeight: '600' },
+    dateText:     { color: t.placeholder, fontSize: 12 },
+
+    rightCol:  { alignItems: 'flex-end', minWidth: 72 },
+    totalAmt:  { fontSize: 15, fontWeight: '700', color: t.text },
+    splitMeta: { fontSize: 11, color: t.placeholder, marginTop: 2 },
+
+    empty:      { alignItems: 'center', marginTop: 80, paddingHorizontal: 32 },
+    emptyTitle: { color: t.text, fontWeight: '700', fontSize: 18, marginBottom: 6 },
+    emptySub:   { color: t.subtext, fontSize: 14, textAlign: 'center', lineHeight: 20 },
+
+  });
+}

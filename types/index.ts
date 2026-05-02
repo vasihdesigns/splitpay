@@ -29,6 +29,7 @@ export interface Group {
   created_at: string;
   members?: GroupMember[];
   balance?: number;
+  currency?: string;
 }
 
 export interface GroupMember {

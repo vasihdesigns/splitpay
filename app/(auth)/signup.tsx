@@ -1,12 +1,15 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, KeyboardAvoidingView,
   Platform, ActivityIndicator, Alert, ScrollView, StyleSheet,
 } from 'react-native';
 import { Link, useRouter } from 'expo-router';
 import { supabase } from '@/lib/supabase';
+import { useTheme, ThemeColors } from '@/lib/theme';
 
 export default function SignupScreen() {
+  const t = useTheme();
+  const s = useMemo(() => makeStyles(t), [t]);
   const [fullName, setFullName] = useState('');
   const [email, setEmail]       = useState('');
   const [password, setPassword] = useState('');
@@ -29,7 +32,7 @@ export default function SignupScreen() {
   }
 
   return (
-    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={s.screen}>
+    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={[s.screen, { backgroundColor: t.bg }]}>
       <ScrollView contentContainerStyle={{ flexGrow: 1 }}>
         <View style={s.container}>
           <View style={s.header}>
@@ -49,7 +52,7 @@ export default function SignupScreen() {
                 <TextInput
                   style={s.input}
                   placeholder={f.placeholder}
-                  placeholderTextColor="#9ca3af"
+                  placeholderTextColor={t.placeholder}
                   value={f.value}
                   onChangeText={f.onChange}
                   secureTextEntry={f.secure}
@@ -72,21 +75,21 @@ export default function SignupScreen() {
   );
 }
 
-const s = StyleSheet.create({
-  screen:    { flex: 1, backgroundColor: '#ffffff' },
+function makeStyles(t: ThemeColors) { return StyleSheet.create({
+  screen:    { flex: 1, backgroundColor: t.bg },
   container: { flex: 1, justifyContent: 'center', paddingHorizontal: 24, paddingVertical: 40 },
   header:    { alignItems: 'center', marginBottom: 32 },
-  logoBox:   { width: 64, height: 64, borderRadius: 16, backgroundColor: '#4f46e5', alignItems: 'center', justifyContent: 'center', marginBottom: 16 },
+  logoBox:   { width: 64, height: 64, borderRadius: 16, backgroundColor: t.primary, alignItems: 'center', justifyContent: 'center', marginBottom: 16 },
   logoText:  { color: '#fff', fontSize: 28, fontWeight: 'bold' },
-  title:     { color: '#111827', fontSize: 28, fontWeight: 'bold' },
-  subtitle:  { color: '#6b7280', fontSize: 15, marginTop: 4 },
+  title:     { color: t.text, fontSize: 28, fontWeight: 'bold' },
+  subtitle:  { color: t.subtext, fontSize: 15, marginTop: 4 },
   form:      { gap: 16 },
   field:     { gap: 6 },
-  label:     { color: '#374151', fontSize: 14, fontWeight: '600' },
-  input:     { backgroundColor: '#f9fafb', borderWidth: 1, borderColor: '#e5e7eb', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 14, fontSize: 16, color: '#111827' },
-  btn:       { backgroundColor: '#4f46e5', borderRadius: 12, paddingVertical: 16, alignItems: 'center', marginTop: 8 },
+  label:     { color: t.text, fontSize: 14, fontWeight: '600' },
+  input:     { backgroundColor: t.inputBg, borderWidth: 1, borderColor: t.border, borderRadius: 12, paddingHorizontal: 16, paddingVertical: 14, fontSize: 16, color: t.text },
+  btn:       { backgroundColor: t.primary, borderRadius: 12, paddingVertical: 16, alignItems: 'center', marginTop: 8 },
   btnText:   { color: '#fff', fontWeight: 'bold', fontSize: 16 },
   footer:    { flexDirection: 'row', justifyContent: 'center', marginTop: 24 },
-  footerText:{ color: '#6b7280' },
-  link:      { color: '#4f46e5', fontWeight: 'bold' },
-});
+  footerText:{ color: t.subtext },
+  link:      { color: t.primary, fontWeight: 'bold' },
+});}
