@@ -1,8 +1,10 @@
 import { useCallback, useMemo, useState } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, ActivityIndicator,
-  RefreshControl, StyleSheet,
+  RefreshControl, StyleSheet, Modal,
 } from 'react-native';
+
+type GroupFilter = 'none' | 'outstanding' | 'you-owe' | 'owe-you';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from 'expo-router';
@@ -94,6 +96,8 @@ export default function GroupsScreen() {
   const [refreshing,      setRefreshing]      = useState(false);
   const [showSettled,     setShowSettled]      = useState(false);
   const [informalGroups,  setInformalGroups]   = useState<InformalGroup[]>([]);
+  const [filter,          setFilter]          = useState<GroupFilter>('none');
+  const [showFilterSheet, setShowFilterSheet] = useState(false);
   const router = useRouter();
   const t = useTheme();
   const s = useMemo(() => makeStyles(t), [t]);
@@ -201,8 +205,35 @@ export default function GroupsScreen() {
     }
   }, [user]));
 
-  const active  = groups.filter((g) => Math.abs(g.balance ?? 0) > 0.01);
-  const settled = groups.filter((g) => Math.abs(g.balance ?? 0) <= 0.01);
+  const GROUP_FILTERS: { key: GroupFilter; label: string }[] = [
+    { key: 'none',        label: 'None' },
+    { key: 'outstanding', label: 'Groups with outstanding balances' },
+    { key: 'you-owe',     label: 'Group balances you owe' },
+    { key: 'owe-you',     label: 'Group balances you are owed' },
+  ];
+
+  const applyGroupFilter = (list: typeof groups) => {
+    switch (filter) {
+      case 'outstanding': return list.filter(g => Math.abs(g.balance ?? 0) > 0.01);
+      case 'you-owe':     return list.filter(g => (g.balance ?? 0) < -0.01);
+      case 'owe-you':     return list.filter(g => (g.balance ?? 0) > 0.01);
+      default:            return list;
+    }
+  };
+
+  const applyInformalFilter = (list: InformalGroup[]) => {
+    switch (filter) {
+      case 'outstanding': return list.filter(ig => Math.abs(ig.balance) > 0.01);
+      case 'you-owe':     return list.filter(ig => ig.balance < -0.01);
+      case 'owe-you':     return list.filter(ig => ig.balance > 0.01);
+      default:            return list;
+    }
+  };
+
+  const filteredGroups   = applyGroupFilter(groups);
+  const filteredInformal = applyInformalFilter(informalGroups);
+  const active  = filteredGroups.filter((g) => Math.abs(g.balance ?? 0) > 0.01);
+  const settled = filter === 'none' ? filteredGroups.filter((g) => Math.abs(g.balance ?? 0) <= 0.01) : [];
 
   const totalOwe  = groups.reduce((s, g) => (g.balance ?? 0) < -0.01 ? s + Math.abs(g.balance ?? 0) : s, 0);
   const totalOwed = groups.reduce((s, g) => (g.balance ?? 0) >  0.01 ? s + (g.balance ?? 0) : s, 0);
@@ -213,10 +244,31 @@ export default function GroupsScreen() {
       {/* Header */}
       <View style={s.topBar}>
         <Text style={s.pageTitle}>Groups</Text>
-        <TouchableOpacity style={s.newBtn} onPress={() => router.push('/group/new')}>
-          <Text style={s.newBtnText}>Create group</Text>
-        </TouchableOpacity>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+          <TouchableOpacity
+            style={[s.filterBtn, filter !== 'none' && { backgroundColor: t.primary }]}
+            onPress={() => setShowFilterSheet(true)}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="options-outline" size={18} color={filter !== 'none' ? '#fff' : t.primary} />
+          </TouchableOpacity>
+          <TouchableOpacity style={s.newBtn} onPress={() => router.push('/group/new')}>
+            <Text style={s.newBtnText}>Create group</Text>
+          </TouchableOpacity>
+        </View>
       </View>
+
+      {/* Active filter pill */}
+      {filter !== 'none' && (
+        <View style={s.activeFilterRow}>
+          <Text style={s.activeFilterText}>
+            {GROUP_FILTERS.find(f => f.key === filter)?.label}
+          </Text>
+          <TouchableOpacity onPress={() => setFilter('none')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <Ionicons name="close-circle" size={16} color={t.primary} />
+          </TouchableOpacity>
+        </View>
+      )}
 
       {/* Overall balance summary */}
       {!loading && (totalOwe > 0 || totalOwed > 0) && (
@@ -285,12 +337,12 @@ export default function GroupsScreen() {
             )}
 
             {/* ── Informal multi-person splits ── */}
-            {informalGroups.length > 0 && (
+            {filteredInformal.length > 0 && (
               <>
                 <View style={s.sectionHeader}>
                   <Text style={s.sectionHeaderText}>Informal splits</Text>
                 </View>
-                {informalGroups.map((ig) => (
+                {filteredInformal.map((ig) => (
                   <InformalGroupCard
                     key={ig.key}
                     ig={ig}
@@ -301,7 +353,7 @@ export default function GroupsScreen() {
             )}
 
             {/* ── Empty state ── */}
-            {groups.length === 0 && informalGroups.length === 0 && (
+            {filteredGroups.length === 0 && filteredInformal.length === 0 && (
               <View style={s.empty}>
                 <Text style={{ fontSize: 48, marginBottom: 16 }}>👥</Text>
                 <Text style={s.emptyTitle}>No groups yet</Text>
@@ -315,6 +367,31 @@ export default function GroupsScreen() {
         )}
       </ScrollView>
 
+      {/* ── Filter bottom sheet ── */}
+      <Modal visible={showFilterSheet} transparent animationType="slide" onRequestClose={() => setShowFilterSheet(false)}>
+        <TouchableOpacity style={s.sheetOverlay} activeOpacity={1} onPress={() => setShowFilterSheet(false)}>
+          <View style={s.sheetContainer}>
+            <View style={s.sheet}>
+              <Text style={s.sheetTitle}>Set filter</Text>
+              {GROUP_FILTERS.map((f, i) => (
+                <TouchableOpacity
+                  key={f.key}
+                  style={[s.sheetOption, i < GROUP_FILTERS.length - 1 && s.sheetOptionBorder]}
+                  onPress={() => { setFilter(f.key); setShowFilterSheet(false); }}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[s.sheetOptionText, f.key === filter && { color: t.primary }]}>{f.label}</Text>
+                  {f.key === filter && <Ionicons name="checkmark" size={18} color={t.primary} />}
+                </TouchableOpacity>
+              ))}
+            </View>
+            <TouchableOpacity style={s.sheetCancel} onPress={() => setShowFilterSheet(false)} activeOpacity={0.7}>
+              <Text style={s.sheetCancelText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
     </SafeAreaView>
   );
 }
@@ -324,8 +401,14 @@ function makeStyles(t: ThemeColors) {
     screen:          { flex: 1, backgroundColor: t.bg },
     topBar:          { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingTop: 16, paddingBottom: 12, backgroundColor: t.card, borderBottomWidth: 1, borderBottomColor: t.border },
     pageTitle:       { color: t.text, fontSize: 24, fontWeight: 'bold' },
+    filterBtn:       { width: 36, height: 36, borderRadius: 18, backgroundColor: t.primaryBg,
+                       alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderColor: t.primary },
     newBtn:          { backgroundColor: t.primary, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 8 },
     newBtnText:      { color: '#ffffff', fontWeight: '600', fontSize: 14 },
+    activeFilterRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginHorizontal: 20,
+                       marginTop: 8, marginBottom: 2, backgroundColor: t.primaryBg, borderRadius: 20,
+                       paddingHorizontal: 12, paddingVertical: 6, alignSelf: 'flex-start' },
+    activeFilterText:{ fontSize: 12, fontWeight: '600', color: t.primary, flexShrink: 1 },
     overallRow:      { paddingHorizontal: 20, paddingVertical: 14, backgroundColor: t.card, borderBottomWidth: 1, borderBottomColor: t.borderStrong },
     overallText:     { color: t.subtext, fontSize: 14, lineHeight: 22 },
     overallOwe:      { color: t.danger, fontWeight: '700' },
@@ -348,5 +431,18 @@ function makeStyles(t: ThemeColors) {
     emptyTitle:      { color: t.text, fontWeight: 'bold', fontSize: 18 },
     emptySub:        { color: t.subtext, fontSize: 14, marginTop: 8, textAlign: 'center' },
     emptyBtn:        { marginTop: 24, backgroundColor: t.primary, borderRadius: 12, paddingHorizontal: 24, paddingVertical: 12 },
+
+    // Filter sheet
+    sheetOverlay:     { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
+    sheetContainer:   { gap: 10, paddingHorizontal: 10, paddingBottom: 30 },
+    sheet:            { backgroundColor: t.card, borderRadius: 16, overflow: 'hidden' },
+    sheetTitle:       { textAlign: 'center', paddingVertical: 14, fontSize: 13, fontWeight: '600',
+                        color: t.placeholder, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: t.border },
+    sheetOption:      { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+                        paddingHorizontal: 20, paddingVertical: 18 },
+    sheetOptionBorder:{ borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: t.border },
+    sheetOptionText:  { fontSize: 17, color: t.primary },
+    sheetCancel:      { backgroundColor: t.card, borderRadius: 16, paddingVertical: 18, alignItems: 'center' },
+    sheetCancelText:  { fontSize: 17, fontWeight: '600', color: t.primary },
   });
 }

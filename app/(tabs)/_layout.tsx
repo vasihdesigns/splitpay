@@ -42,7 +42,7 @@ export default function TabsLayout() {
         tabBarStyle: { backgroundColor: t.tabBar, borderTopColor: t.tabBarBorder, borderTopWidth: 1, height: 64, paddingBottom: 8, elevation: 0 },
         tabBarShowLabel: false,
       }}>
-        <Tabs.Screen name="home"     options={{ tabBarIcon: ({ focused }) => <TabIcon name="grid-outline"            activeName="grid"          label="Dashboard" focused={focused} /> }} />
+        <Tabs.Screen name="home"     options={{ tabBarIcon: ({ focused }) => <TabIcon name="grid-outline"           activeName="grid"          label="Dashboard" focused={focused} /> }} />
         <Tabs.Screen name="friends"  options={{ tabBarIcon: ({ focused }) => <TabIcon name="person-outline"         activeName="person"        label="Friends"   focused={focused} /> }} />
         <Tabs.Screen name="groups"   options={{ tabBarIcon: ({ focused }) => <TabIcon name="people-outline"         activeName="people"        label="Groups"    focused={focused} /> }} />
         <Tabs.Screen name="account"  options={{ tabBarIcon: ({ focused }) => <TabIcon name="person-circle-outline"  activeName="person-circle" label="Account"   focused={focused} /> }} />
@@ -60,7 +60,7 @@ export default function TabsLayout() {
 const styles = StyleSheet.create({
   fab: {
     position: 'absolute',
-    bottom: 82,           // sits just above the 64px tab bar + some breathing room
+    bottom: 82,
     right: 20,
     flexDirection: 'row',
     alignItems: 'center',

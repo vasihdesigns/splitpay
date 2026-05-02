@@ -10,7 +10,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, ActivityIndicator,
-  RefreshControl, StyleSheet, TextInput, Alert,
+  RefreshControl, StyleSheet, TextInput, Alert, Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useRouter } from 'expo-router';
@@ -19,6 +19,8 @@ import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
 import { formatCurrency, getInitials } from '@/lib/utils';
 import { useTheme, ThemeColors } from '@/lib/theme';
+
+type FriendFilter = 'none' | 'outstanding' | 'you-owe' | 'owe-you';
 
 interface GroupBreakdown {
   groupId: string;
@@ -114,10 +116,12 @@ export default function FriendsScreen() {
   const t        = useTheme();
   const s        = useMemo(() => styles(t), [t]);
 
-  const [people,     setPeople]     = useState<PersonBalance[]>([]);
-  const [loading,    setLoading]    = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [search,     setSearch]     = useState('');
+  const [people,          setPeople]          = useState<PersonBalance[]>([]);
+  const [loading,         setLoading]         = useState(true);
+  const [refreshing,      setRefreshing]      = useState(false);
+  const [search,          setSearch]          = useState('');
+  const [filter,          setFilter]          = useState<FriendFilter>('none');
+  const [showFilterSheet, setShowFilterSheet] = useState(false);
 
   // ── fetch ──────────────────────────────────────────────────────────────────
 
@@ -232,12 +236,28 @@ export default function FriendsScreen() {
 
   // ── derived ────────────────────────────────────────────────────────────────
 
-  const filtered = search.trim()
+  const FRIEND_FILTERS: { key: FriendFilter; label: string }[] = [
+    { key: 'none',        label: 'None' },
+    { key: 'outstanding', label: 'Friends with outstanding balances' },
+    { key: 'you-owe',     label: 'Friends you owe' },
+    { key: 'owe-you',     label: 'Friends who owe you' },
+  ];
+
+  const searchFiltered = search.trim()
     ? people.filter(p => p.name.toLowerCase().includes(search.toLowerCase()))
     : people;
 
-  const active  = filtered.filter(p => Math.abs(p.netAmount) > 0.01);
-  const settled = filtered.filter(p => Math.abs(p.netAmount) <= 0.01);
+  const filterApplied = (() => {
+    switch (filter) {
+      case 'outstanding': return searchFiltered.filter(p => Math.abs(p.netAmount) > 0.01);
+      case 'you-owe':     return searchFiltered.filter(p => p.netAmount < -0.01);
+      case 'owe-you':     return searchFiltered.filter(p => p.netAmount > 0.01);
+      default:            return searchFiltered;
+    }
+  })();
+
+  const active  = filterApplied.filter(p => Math.abs(p.netAmount) > 0.01);
+  const settled = filter === 'none' ? filterApplied.filter(p => Math.abs(p.netAmount) <= 0.01) : [];
 
   // ── render ─────────────────────────────────────────────────────────────────
 
@@ -246,10 +266,31 @@ export default function FriendsScreen() {
       {/* Header */}
       <View style={s.header}>
         <Text style={s.title}>Friends</Text>
-        <TouchableOpacity style={s.addBtn} onPress={() => router.push('/add-friends')} activeOpacity={0.8}>
-          <Ionicons name="person-add-outline" size={18} color="#fff" />
-        </TouchableOpacity>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+          <TouchableOpacity
+            style={[s.filterBtn, filter !== 'none' && { backgroundColor: t.primary }]}
+            onPress={() => setShowFilterSheet(true)}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="options-outline" size={18} color={filter !== 'none' ? '#fff' : t.primary} />
+          </TouchableOpacity>
+          <TouchableOpacity style={s.addBtn} onPress={() => router.push('/add-friends')} activeOpacity={0.8}>
+            <Ionicons name="person-add-outline" size={18} color="#fff" />
+          </TouchableOpacity>
+        </View>
       </View>
+
+      {/* Active filter pill */}
+      {filter !== 'none' && (
+        <View style={s.activeFilterRow}>
+          <Text style={s.activeFilterText}>
+            {FRIEND_FILTERS.find(f => f.key === filter)?.label}
+          </Text>
+          <TouchableOpacity onPress={() => setFilter('none')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <Ionicons name="close-circle" size={16} color={t.primary} />
+          </TouchableOpacity>
+        </View>
+      )}
 
       {/* Search */}
       <View style={s.searchWrap}>
@@ -353,6 +394,32 @@ export default function FriendsScreen() {
           )}
         </ScrollView>
       )}
+
+      {/* ── Filter bottom sheet ── */}
+      <Modal visible={showFilterSheet} transparent animationType="slide" onRequestClose={() => setShowFilterSheet(false)}>
+        <TouchableOpacity style={s.sheetOverlay} activeOpacity={1} onPress={() => setShowFilterSheet(false)}>
+          <View style={s.sheetContainer}>
+            <View style={s.sheet}>
+              <Text style={s.sheetTitle}>Set filter</Text>
+              {FRIEND_FILTERS.map((f, i) => (
+                <TouchableOpacity
+                  key={f.key}
+                  style={[s.sheetOption, i < FRIEND_FILTERS.length - 1 && s.sheetOptionBorder]}
+                  onPress={() => { setFilter(f.key); setShowFilterSheet(false); }}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[s.sheetOptionText, f.key === filter && { color: t.primary }]}>{f.label}</Text>
+                  {f.key === filter && <Ionicons name="checkmark" size={18} color={t.primary} />}
+                </TouchableOpacity>
+              ))}
+            </View>
+            <TouchableOpacity style={s.sheetCancel} onPress={() => setShowFilterSheet(false)} activeOpacity={0.7}>
+              <Text style={s.sheetCancelText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
     </SafeAreaView>
   );
 }
@@ -366,8 +433,14 @@ function styles(t: ThemeColors) {
     header:       { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
                     paddingHorizontal: 20, paddingTop: 16, paddingBottom: 4 },
     title:        { fontSize: 28, fontWeight: '800', color: t.text },
+    filterBtn:    { width: 38, height: 38, borderRadius: 19, backgroundColor: t.primaryBg,
+                    alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderColor: t.primary },
     addBtn:       { width: 38, height: 38, borderRadius: 19, backgroundColor: t.primary,
                     alignItems: 'center', justifyContent: 'center' },
+    activeFilterRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginHorizontal: 20,
+                       marginTop: 8, backgroundColor: t.primaryBg, borderRadius: 20,
+                       paddingHorizontal: 12, paddingVertical: 6, alignSelf: 'flex-start' },
+    activeFilterText:{ fontSize: 12, fontWeight: '600', color: t.primary, flexShrink: 1 },
 
     searchWrap:   { flexDirection: 'row', alignItems: 'center', marginHorizontal: 20,
                     marginTop: 12, marginBottom: 4, backgroundColor: t.card, borderRadius: 12,
@@ -402,5 +475,18 @@ function styles(t: ThemeColors) {
     emptyBtn:     { flexDirection: 'row', alignItems: 'center', backgroundColor: t.primary,
                     borderRadius: 12, paddingHorizontal: 20, paddingVertical: 12 },
     emptyBtnText: { color: '#fff', fontSize: 14, fontWeight: '700' },
+
+    // Filter sheet
+    sheetOverlay:     { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
+    sheetContainer:   { gap: 10, paddingHorizontal: 10, paddingBottom: 30 },
+    sheet:            { backgroundColor: t.card, borderRadius: 16, overflow: 'hidden' },
+    sheetTitle:       { textAlign: 'center', paddingVertical: 14, fontSize: 13, fontWeight: '600',
+                        color: t.placeholder, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: t.border },
+    sheetOption:      { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+                        paddingHorizontal: 20, paddingVertical: 18 },
+    sheetOptionBorder:{ borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: t.border },
+    sheetOptionText:  { fontSize: 17, color: t.primary },
+    sheetCancel:      { backgroundColor: t.card, borderRadius: 16, paddingVertical: 18, alignItems: 'center' },
+    sheetCancelText:  { fontSize: 17, fontWeight: '600', color: t.primary },
   });
 }
