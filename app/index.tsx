@@ -12,14 +12,9 @@ export default function Index() {
     if (session) {
       router.replace('/(tabs)/home');
     } else {
-      // Try anonymous sign-in so user skips login screen
-      signInAnonymously().then((ok) => {
-        if (ok) {
-          router.replace('/(tabs)/home');
-        } else {
-          // Anonymous auth not enabled — fall back to login
-          router.replace('/(auth)/login');
-        }
+      // Try anonymous sign-in, then go straight to home either way
+      signInAnonymously().finally(() => {
+        router.replace('/(tabs)/home');
       });
     }
   }, [loading, session]);
