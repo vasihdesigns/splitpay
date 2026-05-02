@@ -43,8 +43,8 @@ export default function TabsLayout() {
         tabBarShowLabel: false,
       }}>
         <Tabs.Screen name="home"     options={{ tabBarIcon: ({ focused }) => <TabIcon name="grid-outline"            activeName="grid"          label="Dashboard" focused={focused} /> }} />
-        <Tabs.Screen name="friends"  options={{ tabBarIcon: ({ focused }) => <TabIcon name="people-outline"         activeName="people"        label="Friends"   focused={focused} /> }} />
-        <Tabs.Screen name="groups"   options={{ tabBarIcon: ({ focused }) => <TabIcon name="people-circle-outline"  activeName="people-circle" label="Groups"    focused={focused} /> }} />
+        <Tabs.Screen name="friends"  options={{ tabBarIcon: ({ focused }) => <TabIcon name="person-outline"         activeName="person"        label="Friends"   focused={focused} /> }} />
+        <Tabs.Screen name="groups"   options={{ tabBarIcon: ({ focused }) => <TabIcon name="people-outline"         activeName="people"        label="Groups"    focused={focused} /> }} />
         <Tabs.Screen name="account"  options={{ tabBarIcon: ({ focused }) => <TabIcon name="person-circle-outline"  activeName="person-circle" label="Account"   focused={focused} /> }} />
         {/* Hidden tabs — not shown in tab bar */}
         <Tabs.Screen name="activity" options={{ href: null }} />

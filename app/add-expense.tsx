@@ -126,8 +126,6 @@ export default function AddExpenseScreen() {
   const [showIconModal,    setShowIconModal]    = useState(false);
   const [showScanModal,    setShowScanModal]    = useState(false);
   const [loading,          setLoading]          = useState(false);
-  const [recurring,        setRecurring]        = useState<string | null>(null);
-  const [showRecurringModal, setShowRecurringModal] = useState(false);
 
   // ── data loading ────────────────────────────────────────────────────────────
 
@@ -315,15 +313,6 @@ export default function AddExpenseScreen() {
     setShowOptionsModal(false);
   }
 
-  function computeNextDue(r: string): string {
-    const d = new Date();
-    if (r === 'daily')   d.setDate(d.getDate() + 1);
-    if (r === 'weekly')  d.setDate(d.getDate() + 7);
-    if (r === 'monthly') d.setMonth(d.getMonth() + 1);
-    if (r === 'yearly')  d.setFullYear(d.getFullYear() + 1);
-    return d.toISOString().split('T')[0];
-  }
-
   async function handleSubmit() {
     if (!description.trim()) { Alert.alert('Missing info', 'Please enter a description.'); return; }
     if (!total || total <= 0) { Alert.alert('Missing info', 'Please enter a valid amount.'); return; }
@@ -371,8 +360,8 @@ export default function AddExpenseScreen() {
         currency,
         split_type:  ['you-equal', 'other-equal'].includes(quickSplit) || splitMethod === 'equal' ? 'equal' : 'exact',
         date,
-        recurring:   recurring ?? null,
-        next_due:    recurring ? computeNextDue(recurring) : null,
+        recurring:   null,
+        next_due:    null,
       });
 
       if (error) { Alert.alert('Error', error.message); return; }
@@ -421,18 +410,30 @@ export default function AddExpenseScreen() {
           With <Text style={s.withBarBold}>you</Text> and:
         </Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flex: 1 }} contentContainerStyle={{ alignItems: 'center', gap: 8 }}>
-          {withPeople.map(p => (
-            <TouchableOpacity key={p.id} style={s.withChip} onPress={() => setShowPeopleModal(true)}>
-              <View style={s.withChipAvatar}>
-                <Text style={s.withChipInitials}>{getInitials(p.full_name)}</Text>
+          {/* Group chip — shown when an expense is being added to a group */}
+          {selectedGroup ? (
+            <TouchableOpacity style={s.withGroupChip} onPress={() => setShowGroupModal(true)} activeOpacity={0.75}>
+              <View style={s.withGroupIconBox}>
+                <Ionicons name="people" size={16} color="#fff" />
               </View>
-              <Text style={s.withChipName}>{p.full_name.split(' ')[0]}</Text>
+              <Text style={s.withGroupName} numberOfLines={1}>
+                {groupName ?? userGroups.find(g => g.id === selectedGroup)?.name ?? 'Group'}
+              </Text>
             </TouchableOpacity>
-          ))}
-          {!groupId && (
-            <TouchableOpacity style={s.withAddBtn} onPress={() => setShowPeopleModal(true)}>
-              <Ionicons name="add" size={20} color={t.primary} />
-            </TouchableOpacity>
+          ) : (
+            <>
+              {withPeople.map(p => (
+                <TouchableOpacity key={p.id} style={s.withChip} onPress={() => setShowPeopleModal(true)}>
+                  <View style={s.withChipAvatar}>
+                    <Text style={s.withChipInitials}>{getInitials(p.full_name)}</Text>
+                  </View>
+                  <Text style={s.withChipName}>{p.full_name.split(' ')[0]}</Text>
+                </TouchableOpacity>
+              ))}
+              <TouchableOpacity style={s.withAddBtn} onPress={() => setShowPeopleModal(true)}>
+                <Ionicons name="person-add-outline" size={17} color={t.primary} />
+              </TouchableOpacity>
+            </>
           )}
         </ScrollView>
       </View>
@@ -512,39 +513,36 @@ export default function AddExpenseScreen() {
             </TouchableOpacity>
           </View>
 
-          {/* ── Action grid ── */}
-          <Text style={s.actionGridLabel}>MORE OPTIONS</Text>
-          <View style={s.actionRow}>
+          {/* ── 4 action boxes ── */}
+          <View style={s.actionGrid}>
             {/* Date */}
             <TouchableOpacity style={s.actionCard} onPress={() => setShowDatePicker(true)} activeOpacity={0.75}>
-              <View style={[s.actionIconCircle, { backgroundColor: t.primaryBg }]}>
+              <View style={s.actionIconCircle}>
                 <Ionicons name="calendar" size={22} color={t.primary} />
               </View>
               <Text style={s.actionLabel}>Date</Text>
               <Text style={s.actionValue} numberOfLines={1}>
                 {date === new Date().toISOString().split('T')[0]
                   ? 'Today'
-                  : dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                  : dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
               </Text>
             </TouchableOpacity>
 
             {/* Group */}
             <TouchableOpacity style={[s.actionCard, !!selectedGroup && s.actionCardActive]} onPress={() => setShowGroupModal(true)} activeOpacity={0.75}>
               <View style={[s.actionIconCircle, !!selectedGroup && { backgroundColor: t.primaryBg }]}>
-                <Ionicons name="people" size={22} color={selectedGroup ? t.primary : t.subtext} />
+                <Ionicons name="people" size={22} color={t.primary} />
               </View>
               <Text style={[s.actionLabel, !!selectedGroup && { color: t.primary }]}>Group</Text>
               <Text style={[s.actionValue, !!selectedGroup && { color: t.primary, fontWeight: '600' }]} numberOfLines={1}>
                 {selectedGroup ? (userGroups.find(g => g.id === selectedGroup)?.name ?? 'Group') : 'None'}
               </Text>
             </TouchableOpacity>
-          </View>
 
-          <View style={s.actionRow}>
             {/* Scan Bill */}
             <TouchableOpacity style={s.actionCard} onPress={() => setShowScanModal(true)} activeOpacity={0.75}>
-              <View style={[s.actionIconCircle, { backgroundColor: t.successBg }]}>
-                <Ionicons name="scan" size={22} color={t.success} />
+              <View style={s.actionIconCircle}>
+                <Ionicons name="scan" size={22} color={t.primary} />
               </View>
               <Text style={s.actionLabel}>Scan Bill</Text>
               <Text style={s.actionValue}>Auto-fill</Text>
@@ -553,30 +551,11 @@ export default function AddExpenseScreen() {
             {/* Note */}
             <TouchableOpacity style={[s.actionCard, !!note.trim() && s.actionCardActive]} onPress={() => setShowNoteModal(true)} activeOpacity={0.75}>
               <View style={[s.actionIconCircle, !!note.trim() && { backgroundColor: t.primaryBg }]}>
-                <Ionicons name="create" size={22} color={note.trim() ? t.primary : t.subtext} />
+                <Ionicons name="create" size={22} color={t.primary} />
               </View>
               <Text style={[s.actionLabel, !!note.trim() && { color: t.primary }]}>Note</Text>
               <Text style={[s.actionValue, !!note.trim() && { color: t.primary, fontWeight: '600' }]} numberOfLines={1}>
                 {note.trim() ? note.trim() : 'Add note'}
-              </Text>
-            </TouchableOpacity>
-          </View>
-
-          <View style={s.actionRow}>
-            {/* Repeat */}
-            <TouchableOpacity
-              style={[s.actionCard, !!recurring && { backgroundColor: '#f0f9ff', borderWidth: 1.5, borderColor: '#0ea5e9' }]}
-              onPress={() => setShowRecurringModal(true)}
-              activeOpacity={0.75}
-            >
-              <View style={[s.actionIconCircle, { backgroundColor: recurring ? '#f0f9ff' : t.inputBg }]}>
-                <Ionicons name="repeat-outline" size={22} color={recurring ? '#0ea5e9' : t.subtext} />
-              </View>
-              <Text style={[s.actionLabel, !!recurring && { color: '#0ea5e9' }]}>Repeat</Text>
-              <Text style={[s.actionValue, !!recurring && { color: '#0ea5e9', fontWeight: '600' }]} numberOfLines={1}>
-                {recurring
-                  ? recurring.charAt(0).toUpperCase() + recurring.slice(1)
-                  : 'None'}
               </Text>
             </TouchableOpacity>
           </View>
@@ -755,46 +734,6 @@ export default function AddExpenseScreen() {
               <Text style={{ color: t.danger, fontSize: 14 }}>Clear note</Text>
             </TouchableOpacity>
           ) : null}
-        </SafeAreaView>
-      </Modal>
-
-      {/* Recurring picker modal */}
-      <Modal visible={showRecurringModal} animationType="slide" presentationStyle="pageSheet"
-        onRequestClose={() => setShowRecurringModal(false)}>
-        <SafeAreaView style={{ flex: 1, backgroundColor: t.bg }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 14, backgroundColor: t.card, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: t.border }}>
-            <TouchableOpacity onPress={() => setShowRecurringModal(false)}>
-              <Text style={{ color: t.subtext, fontSize: 16 }}>Cancel</Text>
-            </TouchableOpacity>
-            <Text style={{ fontSize: 17, fontWeight: '700', color: t.text }}>Repeat</Text>
-            <TouchableOpacity onPress={() => setShowRecurringModal(false)}>
-              <Text style={{ color: '#0ea5e9', fontSize: 16, fontWeight: '700' }}>Done</Text>
-            </TouchableOpacity>
-          </View>
-          <ScrollView>
-            {([null, 'daily', 'weekly', 'monthly', 'yearly'] as (string | null)[]).map((opt) => {
-              const label = opt ? opt.charAt(0).toUpperCase() + opt.slice(1) : 'None';
-              const isSelected = recurring === opt;
-              return (
-                <TouchableOpacity
-                  key={String(opt)}
-                  style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: t.card, paddingHorizontal: 20, paddingVertical: 18, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: t.border }}
-                  onPress={() => { setRecurring(opt); setShowRecurringModal(false); }}
-                  activeOpacity={0.7}
-                >
-                  <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: opt ? '#f0f9ff' : t.inputBg, alignItems: 'center', justifyContent: 'center', marginRight: 14 }}>
-                    <Ionicons
-                      name={opt ? 'repeat-outline' : 'close-outline'}
-                      size={22}
-                      color={opt ? '#0ea5e9' : t.subtext}
-                    />
-                  </View>
-                  <Text style={{ flex: 1, fontSize: 15, color: t.text, fontWeight: '500' }}>{label}</Text>
-                  {isSelected && <Ionicons name="checkmark-circle" size={22} color="#0ea5e9" />}
-                </TouchableOpacity>
-              );
-            })}
-          </ScrollView>
         </SafeAreaView>
       </Modal>
 
@@ -2051,6 +1990,9 @@ function makeStyles(t: ThemeColors) { return StyleSheet.create({
   withChipInitials: { color: '#fff', fontWeight: '700', fontSize: 11 },
   withChipName:     { color: t.primary, fontSize: 13, fontWeight: '600' },
   withAddBtn:       { width: 30, height: 30, borderRadius: 15, backgroundColor: t.primaryBg, alignItems: 'center', justifyContent: 'center' },
+  withGroupChip:    { flexDirection: 'row', alignItems: 'center', backgroundColor: t.primaryBg, borderRadius: 20, paddingHorizontal: 4, paddingRight: 12, gap: 8, maxWidth: 260 },
+  withGroupIconBox: { width: 34, height: 34, borderRadius: 17, backgroundColor: t.primary, alignItems: 'center', justifyContent: 'center' },
+  withGroupName:    { color: t.primary, fontSize: 14, fontWeight: '600', flexShrink: 1 },
 
   // Card
   card:             { marginHorizontal: 16, marginTop: 20, backgroundColor: t.card, borderRadius: 20, overflow: 'hidden',
@@ -2081,13 +2023,12 @@ function makeStyles(t: ThemeColors) { return StyleSheet.create({
   splitBtnEdit:     { color: t.placeholder, fontSize: 13, fontWeight: '500' },
 
   // Action grid (below Split section, inside ScrollView)
-  actionGridLabel:  { paddingHorizontal: 20, paddingTop: 28, paddingBottom: 10, fontSize: 11, fontWeight: '700', color: t.placeholder, letterSpacing: 1 },
-  actionRow:        { flexDirection: 'row', marginHorizontal: 16, gap: 10, marginBottom: 10 },
-  actionCard:       { flex: 1, backgroundColor: t.inputBg, borderRadius: 14, paddingVertical: 16, paddingHorizontal: 12,
+  actionGrid:       { flexDirection: 'row', marginHorizontal: 16, gap: 10, marginTop: 16, marginBottom: 10 },
+  actionCard:       { flex: 1, backgroundColor: t.inputBg, borderRadius: 14, paddingVertical: 14, paddingHorizontal: 8,
                       alignItems: 'center', gap: 6 },
   actionCardActive: { backgroundColor: t.primaryBg, borderWidth: 1.5, borderColor: t.primary },
-  actionIconCircle: { width: 44, height: 44, borderRadius: 13, backgroundColor: t.muted, alignItems: 'center', justifyContent: 'center' },
-  actionLabel:      { fontSize: 13, fontWeight: '600', color: t.subtext, textAlign: 'center' },
+  actionIconCircle: { width: 44, height: 44, borderRadius: 13, backgroundColor: t.primaryBg, alignItems: 'center', justifyContent: 'center' },
+  actionLabel:      { fontSize: 12, fontWeight: '600', color: t.subtext, textAlign: 'center' },
   actionValue:      { fontSize: 11, color: t.placeholder, fontWeight: '500', textAlign: 'center' },
 
   // Date picker sheet

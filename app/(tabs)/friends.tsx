@@ -128,107 +128,92 @@ export default function FriendsScreen() {
     if (!isRefresh) setLoading(true);
 
     try {
-      // 1. My unpaid splits (what I owe others)
-      const { data: myUnpaid } = await supabase
+      // 1. All my splits (any status) to discover expense IDs I'm part of
+      const { data: myAllSplits } = await supabase
         .from('expense_splits')
-        .select('amount, expense_id')
-        .eq('user_id', user.id)
-        .eq('paid', false);
+        .select('expense_id, amount, paid')
+        .eq('user_id', user.id);
 
-      const oweExpenseIds = myUnpaid?.map((s: any) => s.expense_id) ?? [];
+      const allMyExpenseIds = (myAllSplits ?? []).map((s: any) => s.expense_id);
+      if (!allMyExpenseIds.length) {
+        setPeople([]); setLoading(false); setRefreshing(false); return;
+      }
 
-      // 2. Expenses I paid
-      const { data: myExpenses } = await supabase
+      // 2. Only direct (no group_id) expenses — group splits belong in Groups tab
+      const { data: directExpenses } = await supabase
         .from('expenses')
-        .select('id, group_id, currency')
-        .eq('paid_by', user.id);
+        .select('id, paid_by, currency')
+        .in('id', allMyExpenseIds)
+        .is('group_id', null);
 
-      const myExpenseIds  = myExpenses?.map((e: any) => e.id) ?? [];
-      const myExpenseMap: Record<string, any> = {};
-      myExpenses?.forEach((e: any) => { myExpenseMap[e.id] = e; });
-
-      // 3. Expense details for splits I owe
-      let oweExpenseMap: Record<string, any> = {};
-      if (oweExpenseIds.length > 0) {
-        const { data: oweExpenses } = await supabase
-          .from('expenses')
-          .select('id, paid_by, group_id, currency')
-          .in('id', oweExpenseIds);
-        oweExpenses?.forEach((e: any) => { oweExpenseMap[e.id] = e; });
+      const directIds = (directExpenses ?? []).map((e: any) => e.id);
+      if (!directIds.length) {
+        setPeople([]); setLoading(false); setRefreshing(false); return;
       }
 
-      // 4. Others' unpaid splits on my expenses
-      let othersUnpaid: any[] = [];
-      if (myExpenseIds.length > 0) {
-        const { data } = await supabase
-          .from('expense_splits')
-          .select('amount, user_id, expense_id')
-          .in('expense_id', myExpenseIds)
-          .neq('user_id', user.id)
-          .eq('paid', false);
-        othersUnpaid = data ?? [];
+      // 3. All splits for these direct expenses (to count participants)
+      const { data: allSplits } = await supabase
+        .from('expense_splits')
+        .select('expense_id, user_id, amount, paid')
+        .in('expense_id', directIds);
+
+      // 4. Keep only 1-on-1 expenses (exactly 2 splits total)
+      const splitCountMap: Record<string, number> = {};
+      (allSplits ?? []).forEach((s: any) => {
+        splitCountMap[s.expense_id] = (splitCountMap[s.expense_id] ?? 0) + 1;
+      });
+      const oneOnOneIds = new Set(directIds.filter(id => splitCountMap[id] === 2));
+
+      if (!oneOnOneIds.size) {
+        setPeople([]); setLoading(false); setRefreshing(false); return;
       }
 
-      // 5. Group names
-      const allExpenseMap = { ...myExpenseMap, ...oweExpenseMap };
-      const groupIds = [...new Set(
-        Object.values(allExpenseMap).map((e: any) => e.group_id).filter(Boolean)
-      )];
-      const groupNameMap: Record<string, string> = {};
-      if (groupIds.length > 0) {
-        const { data: groups } = await supabase
-          .from('groups').select('id, name').in('id', groupIds);
-        groups?.forEach((g: any) => { groupNameMap[g.id] = g.name; });
-      }
+      // 5. Build expense lookup for 1-on-1 expenses
+      const expenseMap: Record<string, any> = {};
+      (directExpenses ?? []).forEach((e: any) => {
+        if (oneOnOneIds.has(e.id)) expenseMap[e.id] = e;
+      });
 
-      // 6. Build per-person breakdowns
-      const breakdowns: Record<string, Record<string, { amount: number; name: string; currency: string }>> = {};
+      // 6. Compute per-person net balance from unpaid splits only
+      const balances: Record<string, { amount: number; currency: string }> = {};
 
-      for (const split of (myUnpaid ?? [])) {
-        const expense = oweExpenseMap[split.expense_id];
-        if (!expense || expense.paid_by === user.id) continue;
-        const uid   = expense.paid_by;
-        const gid   = expense.group_id ?? '__none__';
-        const gname = expense.group_id ? (groupNameMap[expense.group_id] ?? 'Group') : 'Direct';
-        const cur   = expense.currency ?? 'USD';
-        if (!breakdowns[uid]) breakdowns[uid] = {};
-        if (!breakdowns[uid][gid]) breakdowns[uid][gid] = { amount: 0, name: gname, currency: cur };
-        breakdowns[uid][gid].amount -= Number(split.amount);
-      }
-
-      for (const split of othersUnpaid) {
-        const expense = myExpenseMap[split.expense_id];
+      for (const split of (allSplits ?? [])) {
+        if (!oneOnOneIds.has(split.expense_id)) continue;
+        if (split.paid) continue;
+        const expense = expenseMap[split.expense_id];
         if (!expense) continue;
-        const uid   = split.user_id;
-        const gid   = expense.group_id ?? '__none__';
-        const gname = expense.group_id ? (groupNameMap[expense.group_id] ?? 'Group') : 'Direct';
-        const cur   = expense.currency ?? 'USD';
-        if (!breakdowns[uid]) breakdowns[uid] = {};
-        if (!breakdowns[uid][gid]) breakdowns[uid][gid] = { amount: 0, name: gname, currency: cur };
-        breakdowns[uid][gid].amount += Number(split.amount);
+
+        if (split.user_id === user.id) {
+          // I owe the payer my share
+          const uid = expense.paid_by;
+          if (uid === user.id) continue;
+          if (!balances[uid]) balances[uid] = { amount: 0, currency: expense.currency ?? 'USD' };
+          balances[uid].amount -= Number(split.amount);
+        } else if (expense.paid_by === user.id) {
+          // This person owes me their share
+          const uid = split.user_id;
+          if (!balances[uid]) balances[uid] = { amount: 0, currency: expense.currency ?? 'USD' };
+          balances[uid].amount += Number(split.amount);
+        }
       }
 
       // 7. Profile names
-      const allUids = Object.keys(breakdowns);
+      const allUids = Object.keys(balances);
       const nameMap: Record<string, string> = {};
       if (allUids.length > 0) {
         const { data: profiles } = await supabase
           .from('profiles').select('id, full_name').in('id', allUids);
-        profiles?.forEach((p: any) => { nameMap[p.id] = p.full_name; });
+        profiles?.forEach((p: any) => { nameMap[p.id] = p.full_name ?? 'Someone'; });
       }
 
-      // 8. Assemble
-      const result: PersonBalance[] = allUids.map((uid) => {
-        const bd = breakdowns[uid];
-        const breakdown: GroupBreakdown[] = Object.entries(bd)
-          .map(([gid, { amount, name, currency }]) => ({ groupId: gid, groupName: name, amount, currency }))
-          .filter(b => Math.abs(b.amount) > 0.01)
-          .sort((a, b) => Math.abs(b.amount) - Math.abs(a.amount));
-        const net = breakdown.reduce((s, b) => s + b.amount, 0);
-        const dom = breakdown[0]?.currency ?? 'USD';
-        return { userId: uid, name: nameMap[uid] ?? 'Someone', netAmount: net, currency: dom, breakdown };
-      })
-        .filter(p => p.breakdown.length > 0)
+      // 8. Assemble — no group breakdown needed for direct 1-on-1 friends
+      const result: PersonBalance[] = allUids.map((uid) => ({
+        userId:    uid,
+        name:      nameMap[uid] ?? 'Someone',
+        netAmount: balances[uid].amount,
+        currency:  balances[uid].currency,
+        breakdown: [],
+      }))
         .sort((a, b) => Math.abs(b.netAmount) - Math.abs(a.netAmount));
 
       setPeople(result);
@@ -344,7 +329,7 @@ export default function FriendsScreen() {
           {active.length === 0 && settled.length === 0 && (
             <View style={s.empty}>
               <View style={s.emptyIcon}>
-                <Ionicons name="people-outline" size={40} color={t.primary} />
+                <Ionicons name="person-outline" size={40} color={t.primary} />
               </View>
               <Text style={s.emptyTitle}>
                 {search.trim() ? 'No matching friends' : 'No friends yet'}

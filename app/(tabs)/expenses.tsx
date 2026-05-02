@@ -422,11 +422,6 @@ export default function ExpensesScreen() {
         )}
       </ScrollView>
 
-      {/* FAB */}
-      <TouchableOpacity style={s.fab} onPress={() => router.push('/add-expense')}>
-        <Ionicons name="add-circle-outline" size={22} color="#fff" />
-        <Text style={s.fabText}>Add expense</Text>
-      </TouchableOpacity>
     </SafeAreaView>
   );
 }
@@ -504,9 +499,4 @@ const s = StyleSheet.create({
   emptyTitle: { color: '#111827', fontWeight: 'bold', fontSize: 18 },
   emptySub:   { color: '#6b7280', fontSize: 14, marginTop: 8 },
 
-  // FAB
-  fab:     { position: 'absolute', bottom: 24, right: 20, backgroundColor: '#4f46e5', borderRadius: 28,
-             flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 14, gap: 8,
-             shadowColor: '#4f46e5', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 6 },
-  fabText: { color: '#fff', fontWeight: 'bold', fontSize: 15 },
 });

@@ -438,12 +438,6 @@ export default function FriendDetailScreen() {
         </ScrollView>
       )}
 
-      {/* FAB */}
-      <TouchableOpacity style={s.fab} onPress={() => router.push('/add-expense')}>
-        <Ionicons name="receipt-outline" size={20} color="#fff" />
-        <Text style={s.fabText}>Add expense</Text>
-      </TouchableOpacity>
-
       {/* ── Charts Modal ── */}
       <Modal visible={showCharts} animationType="slide" presentationStyle="pageSheet"
         onRequestClose={() => setShowCharts(false)}>
@@ -555,8 +549,6 @@ function makeStyles(t: ThemeColors) { return StyleSheet.create({
   empty:     { alignItems: 'center', marginTop: 80, gap: 12 },
   emptyText: { color: t.placeholder, fontSize: 15 },
 
-  fab:     { position: 'absolute', bottom: 24, right: 20, backgroundColor: '#0d9488', borderRadius: 28, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 14, gap: 8, shadowColor: '#0d9488', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 6 },
-  fabText: { color: '#fff', fontWeight: '700', fontSize: 15 },
 });}
 
 function makeCmStyles(t: ThemeColors) { return StyleSheet.create({
